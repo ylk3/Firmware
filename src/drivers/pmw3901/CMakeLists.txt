@@ -34,7 +34,7 @@
 px4_add_module(
 	MODULE drivers__pmw3901
 	MAIN pmw3901
-	STACK_MAIN 1200
+	STACK_MAIN 1400
 	SRCS
 		pmw3901.cpp
 	)
