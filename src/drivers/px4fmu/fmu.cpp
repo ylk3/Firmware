@@ -1207,17 +1207,19 @@ PX4FMU::cycle()
 				pwm_limit_calc(_throttle_armed, arm_nothrottle(), mixed_num_outputs, _reverse_pwm_mask,
 					       _disarmed_pwm, _min_pwm, _max_pwm, outputs, pwm_limited, &_pwm_limit);
 
-				/* overwrite outputs in case of force_failsafe with _failsafe_pwm PWM values */
-				if (_armed.force_failsafe) {
-					for (size_t i = 0; i < mixed_num_outputs; i++) {
-						pwm_limited[i] = _failsafe_pwm[i];
+				if (_armed.armed) {
+					/* overwrite outputs in case of force_failsafe with _failsafe_pwm PWM values */
+					if (_armed.force_failsafe) {
+						for (size_t i = 0; i < mixed_num_outputs; i++) {
+							pwm_limited[i] = _failsafe_pwm[i];
+						}
 					}
-				}
 
-				/* overwrite outputs in case of lockdown or parachute triggering with disarmed PWM values */
-				if (_armed.lockdown || _armed.manual_lockdown) {
-					for (size_t i = 0; i < mixed_num_outputs; i++) {
-						pwm_limited[i] = _disarmed_pwm[i];
+					/* overwrite outputs in case of lockdown or parachute triggering with disarmed PWM values */
+					if (_armed.lockdown || _armed.manual_lockdown) {
+						for (size_t i = 0; i < mixed_num_outputs; i++) {
+							pwm_limited[i] = _disarmed_pwm[i];
+						}
 					}
 				}
 
