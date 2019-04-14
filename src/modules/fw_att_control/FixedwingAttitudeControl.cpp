@@ -500,7 +500,8 @@ void FixedwingAttitudeControl::get_airspeed_and_scaling(float &airspeed, float &
 	 *
 	 * Forcing the scaling to this value allows reasonable handheld tests.
 	 */
-	airspeed_scaling = _parameters.airspeed_trim / math::max(airspeed, _parameters.airspeed_min);
+	airspeed_scaling = _parameters.airspeed_trim /
+			   math::constrain(airspeed, _parameters.airspeed_min, _parameters.airspeed_max);
 }
 
 void FixedwingAttitudeControl::run()
