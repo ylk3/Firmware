@@ -51,7 +51,7 @@
 #include <uORB/topics/vehicle_command_ack.h>
 #include <uORB/topics/vehicle_control_mode.h>
 #include <uORB/topics/vehicle_status.h>
-#include <uORB/topics/vehicle_status_flags.h>
+#include <uORB/topics/arm_disarm.h>
 
 // subscriptions
 #include <uORB/Subscription.hpp>

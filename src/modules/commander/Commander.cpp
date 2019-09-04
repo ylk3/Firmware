@@ -1267,18 +1267,21 @@ Commander::run()
 
 	bool updated = false;
 
-	uORB::Subscription actuator_controls_sub{ORB_ID_VEHICLE_ATTITUDE_CONTROLS};
-	uORB::Subscription cmd_sub{ORB_ID(vehicle_command)};
-	uORB::Subscription cpuload_sub{ORB_ID(cpuload)};
-	uORB::Subscription geofence_result_sub{ORB_ID(geofence_result)};
-	uORB::Subscription land_detector_sub{ORB_ID(vehicle_land_detected)};
-	uORB::Subscription param_changed_sub{ORB_ID(parameter_update)};
-	uORB::Subscription safety_sub{ORB_ID(safety)};
-	uORB::Subscription sp_man_sub{ORB_ID(manual_control_setpoint)};
-	uORB::Subscription subsys_sub{ORB_ID(subsystem_info)};
-	uORB::Subscription system_power_sub{ORB_ID(system_power)};
-	uORB::Subscription vtol_vehicle_status_sub{ORB_ID(vtol_vehicle_status)};
-	uORB::Subscription esc_status_sub{ORB_ID(esc_status)};
+
+	int actuator_controls_sub = orb_subscribe(ORB_ID_VEHICLE_ATTITUDE_CONTROLS);
+	int cmd_sub = orb_subscribe(ORB_ID(vehicle_command));
+	int cpuload_sub = orb_subscribe(ORB_ID(cpuload));
+	int geofence_result_sub = orb_subscribe(ORB_ID(geofence_result));
+	int land_detector_sub = orb_subscribe(ORB_ID(vehicle_land_detected));
+	int offboard_control_mode_sub = orb_subscribe(ORB_ID(offboard_control_mode));
+	int param_changed_sub = orb_subscribe(ORB_ID(parameter_update));
+	int safety_sub = orb_subscribe(ORB_ID(safety));
+	int sp_man_sub = orb_subscribe(ORB_ID(manual_control_setpoint));
+	int subsys_sub = orb_subscribe(ORB_ID(subsystem_info));
+	int system_power_sub = orb_subscribe(ORB_ID(system_power));
+	int vtol_vehicle_status_sub = orb_subscribe(ORB_ID(vtol_vehicle_status));
+  int arm_disarm_sub = orb_subscribe(ORB_ID(arm_disarm));
+
 
 	geofence_result_s geofence_result {};
 
@@ -1575,6 +1578,27 @@ Commander::run()
 				}
 			}
 		}
+
+        /* update DG arm_disarm status*/
+        orb_check(arm_disarm_sub, &updated);
+        if(updated){
+            struct arm_disarm_s arm_disarm_status;
+            arm_disarm_status.arm_disarm = was_armed;
+            orb_copy(ORB_ID(arm_disarm), arm_disarm_sub, &arm_disarm_status);
+            warnx("_missle_ctrl.cmd_id:%d", arm_disarm_status.arm_disarm);
+            if(arm_disarm_status.arm_disarm)
+            {
+                if (TRANSITION_CHANGED != arm_disarm(true, &mavlink_log_pub, "command line")) {
+                    warnx("arming failed");
+                }
+            }
+            else
+            {
+                if (TRANSITION_DENIED == arm_disarm(false, &mavlink_log_pub, "command line")) {
+                    warnx("rejected disarm");
+                }
+            }
+        }
 
 		/* update vtol vehicle status*/
 		if (vtol_vehicle_status_sub.updated()) {
