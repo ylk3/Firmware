@@ -9,6 +9,7 @@ __EXPORT int rw_uart_main(int argc, char *argv[]);
 
 static bool rw_thread_should_exit = false;		/**< px4_uart exit flag */
 static bool rw_uart_thread_running = false;		/**< px4_uart status flag */
+int uart_read;
 uint8_t param_saved[62];
 Waypoint_saved wp_data;
 
@@ -116,9 +117,12 @@ void msg_orb_sub (MSG_orb_sub *msg_fd)
     msg_fd->local_position_sp_fd = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
     msg_fd->local_position_fd = orb_subscribe(ORB_ID(vehicle_local_position));
     msg_fd->air_data_fd = orb_subscribe(ORB_ID(vehicle_air_data));
-    msg_fd->attitude_fd = orb_subscribe(ORB_ID(vehicle_attitude_setpoint));
+    msg_fd->attitude_fd = orb_subscribe(ORB_ID(vehicle_attitude));
     msg_fd->battery_fd = orb_subscribe(ORB_ID(battery_status));
     msg_fd->geofence_fd = orb_subscribe(ORB_ID(geofence_result));
+    msg_fd->vibe_fd = orb_subscribe(ORB_ID(estimator_status));
+    msg_fd->global_position_fd = orb_subscribe(ORB_ID(vehicle_global_position));
+    //msg_fd->input_rc_fd = orb_subscribe(ORB_ID(input_rc));
     //msg_fd->control_mode_fd = orb_subscribe(ORB_ID(vehicle_control_mode));
     //msg_fd->cpu_fd = orb_subscribe(ORB_ID(cpuload));
 }
@@ -135,9 +139,12 @@ void msg_orb_data(MSG_orb_data *msg_data, MSG_orb_sub msg_fd)
    orb_copy(ORB_ID(vehicle_local_position_setpoint), msg_fd.local_position_sp_fd, &msg_data->local_position_sp_data);
    orb_copy(ORB_ID(vehicle_local_position), msg_fd.local_position_fd, &msg_data->local_position_data);
    orb_copy(ORB_ID(vehicle_air_data), msg_fd.air_data_fd, &msg_data->air_data);
-   orb_copy(ORB_ID(vehicle_attitude_setpoint), msg_fd.attitude_fd, &msg_data->attitude_data);
+   orb_copy(ORB_ID(vehicle_attitude), msg_fd.attitude_fd, &msg_data->attitude_data);
    orb_copy(ORB_ID(battery_status), msg_fd.battery_fd, &msg_data->battery_data);
    orb_copy(ORB_ID(geofence_result), msg_fd.geofence_fd, &msg_data->geofence_data);
+   orb_copy(ORB_ID(estimator_status), msg_fd.vibe_fd, &msg_data->vibe_data);
+   orb_copy(ORB_ID(vehicle_global_position), msg_fd.global_position_fd, &msg_data->global_position_data);
+   //orb_copy(ORB_ID(input_rc), msg_fd.input_rc_fd, &msg_data->input_rc_data);
    //orb_copy(ORB_ID(vehicle_control_mode), msg_fd.control_mode_fd, &msg_data->control_mode_data);
    //orb_copy(ORB_ID(cpuload), msg_fd.cpu_fd, &msg_data->cpu_data);
 }
@@ -156,14 +163,22 @@ void msg_orb_unsub (MSG_orb_sub *msg_fd)
     orb_unsubscribe(msg_fd->attitude_fd);
     orb_unsubscribe(msg_fd->battery_fd);
     orb_unsubscribe(msg_fd->geofence_fd);
+    orb_unsubscribe(msg_fd->vibe_fd);
+    orb_unsubscribe(msg_fd->global_position_fd);
     //orb_unsubscribe(msg_fd->cpu_fd);
 }
 
 void msg_param_hd_cache (MSG_param_hd *msg_hd)
 {
-    msg_hd->roll_p_hd = param_find("MC_ROLL_P");
-    msg_hd->pitch_p_hd = param_find("MC_PITCH_P");
-    msg_hd->yaw_p_hd = param_find("MC_YAW_P");
+    msg_hd->roll_p_hd = param_find("MC_ROLLRATE_P");
+    msg_hd->roll_i_hd = param_find("MC_ROLLRATE_I");
+    msg_hd->roll_d_hd = param_find("MC_ROLLRATE_D");
+    msg_hd->pitch_p_hd = param_find("MC_PITCHRATE_P");
+    msg_hd->pitch_i_hd = param_find("MC_PITCHRATE_I");
+    msg_hd->pitch_d_hd = param_find("MC_PITCHRATE_D");
+    msg_hd->yaw_p_hd = param_find("MC_YAWRATE_P");
+    msg_hd->yaw_i_hd = param_find("MC_YAWRATE_I");
+    msg_hd->yaw_d_hd = param_find("MC_YAWRATE_D");
     msg_hd->z_p_hd = param_find("MPC_Z_P");
     msg_hd->up_vel_max_hd = param_find("MPC_Z_VEL_MAX_UP");
     msg_hd->xy_vel_max_hd = param_find("MPC_VEL_MANUAL");
@@ -177,7 +192,7 @@ void msg_param_hd_cache (MSG_param_hd *msg_hd)
     msg_hd->higt_max_hd = param_find("GF_MAX_VER_DIST");
     msg_hd->acc_hor_max_hd = param_find("MPC_ACC_HOR_MAX");
     msg_hd->dist_max_hd = param_find("GF_MAX_HOR_DIST");
-    msg_hd->mav_type_hd = param_find("MAV_TYPE");
+    msg_hd->mav_type_hd = param_find("SYS_AUTOSTART");
     msg_hd->battery_n_cells_hd = param_find("BAT_N_CELLS");
     msg_hd->battery_warn_hd = param_find("BAT_LOW_THR");
     msg_hd->battery_fail_hd = param_find("COM_LOW_BAT_ACT");
@@ -247,7 +262,7 @@ int rw_uart_thread_main(int argc, char *argv[])
                 TEL4:/dev/ttyS3
          */
 
-         int uart_read = rw_uart_init();
+         uart_read = rw_uart_init();
 
          if (false == set_rw_uart_baudrate(uart_read, 115200)) {
                  printf("set_rw_uart_baudrate is failed\n");
@@ -273,7 +288,7 @@ int rw_uart_thread_main(int argc, char *argv[])
         int error_counter = 0;
 
         memset(param_saved, 0, sizeof(param_saved));
-        msg_param_saved_get(msg_hd, uart_read);
+        msg_param_saved_get(msg_hd);
 
         memset(&wp_data, 0, sizeof(wp_data));
         wp_data.push = wp_data.setd;
@@ -291,13 +306,14 @@ int rw_uart_thread_main(int argc, char *argv[])
             memset(buffer, 0, sizeof(buffer));
 
             msg_orb_data(&msg_data, msg_fd);
-            msg_pack_send(msg_data, uart_read);
+            msg_pack_send(msg_data);
+            usleep(10000);
 
-            int poll_ret = poll(fds,1,10);//阻塞等待10ms
+            int poll_ret = poll(fds,1,10);//阻塞等待20ms
             if (poll_ret == 0)
             {
                     /* this means none of our providers is giving us data */
-                  //printf("No receive data for 10ms\n");
+                  //printf("No receive data for 20ms\n");
             } else if (poll_ret < 0)
             {
                /* this is seriously bad - should be an emergency */
@@ -317,18 +333,21 @@ int rw_uart_thread_main(int argc, char *argv[])
                        if(data == '$')
                        {//找到帧头$
                                buffer[0] = '$';
+                               //usleep(100);
                                for(int i = 1; i  < 5; i++)
                                {
                                        read(uart_read,&data,1);//读取后面的数据
                                        buffer[i] = data;
+                                       //usleep(100);
                            }
                        }
-                       printf("data=%s\n", buffer);
-                       find_r_type(buffer, &msg_data, &msg_pd, msg_hd, uart_read);
+                       //printf("data=%s\n", buffer);
+                       find_r_type(buffer, &msg_data, &msg_pd, msg_hd);
                }
             }
 
-          usleep(1000000);
+          //usleep(1000000);
+          //usleep(10000);
 
         }
 

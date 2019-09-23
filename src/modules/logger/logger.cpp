@@ -48,6 +48,7 @@
 #include <uORB/uORBTopics.h>
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/vehicle_command_ack.h>
+#include <uORB/topics/follow_target.h>
 
 #include <drivers/drv_hrt.h>
 #include <mathlib/math/Limits.hpp>
@@ -510,6 +511,8 @@ void Logger::add_default_topics()
 {
 	add_topic("actuator_controls_0", 100);
 	add_topic("actuator_controls_1", 100);
+  add_topic("actuator_outputs", 100);
+  add_topic("adc_report", 200);
 	add_topic("airspeed", 200);
 	add_topic("airspeed_validated", 200);
 	add_topic("camera_capture");
@@ -520,6 +523,7 @@ void Logger::add_default_topics()
 	add_topic("ekf_gps_drift");
 	add_topic("esc_status", 250);
 	add_topic("estimator_status", 200);
+    add_topic("follow_target", 50);
 	add_topic("home_position");
 	add_topic("input_rc", 200);
 	add_topic("manual_control_setpoint", 200);
@@ -528,6 +532,8 @@ void Logger::add_default_topics()
 	add_topic("optical_flow", 50);
 	add_topic("position_controller_status", 500);
 	add_topic("position_setpoint_triplet", 200);
+	//add_topic("radio_status");
+  add_topic("rate_ctrl_status", 30);
 	add_topic("radio_status");
 	add_topic("rate_ctrl_status", 200);
 	add_topic("sensor_combined", 100);
@@ -540,7 +546,8 @@ void Logger::add_default_topics()
 	add_topic("vehicle_attitude", 50);
 	add_topic("vehicle_attitude_setpoint", 100);
 	add_topic("vehicle_command");
-	add_topic("vehicle_global_position", 200);
+  add_topic("vehicle_global_position", 200); //200
+	add_topic("vehicle_gps_position");
 	add_topic("vehicle_land_detected");
 	add_topic("vehicle_local_position", 100);
 	add_topic("vehicle_local_position_setpoint", 100);
@@ -550,7 +557,6 @@ void Logger::add_default_topics()
 	add_topic("vehicle_status_flags");
 	add_topic("vtol_vehicle_status", 200);
 	add_topic("wind_estimate", 200);
-
 	add_topic_multi("actuator_outputs", 100);
 	add_topic_multi("battery_status", 500);
 	add_topic_multi("distance_sensor", 100);
@@ -1739,21 +1745,6 @@ void Logger::write_format(LogType type, const orb_metadata &meta, WrittenFormats
 
 		// ignore built-in types
 		if (strcmp(type_name, "int8_t") != 0 &&
-<<<<<<< HEAD
-		    strcmp(type_name, "uint8_t") != 0 &&
-		    strcmp(type_name, "int16_t") != 0 &&
-		    strcmp(type_name, "uint16_t") != 0 &&
-		    strcmp(type_name, "int16_t") != 0 &&
-		    strcmp(type_name, "uint16_t") != 0 &&
-		    strcmp(type_name, "int32_t") != 0 &&
-		    strcmp(type_name, "uint32_t") != 0 &&
-		    strcmp(type_name, "int64_t") != 0 &&
-		    strcmp(type_name, "uint64_t") != 0 &&
-		    strcmp(type_name, "float") != 0 &&
-		    strcmp(type_name, "double") != 0 &&
-		    strcmp(type_name, "bool") != 0 &&
-		    strcmp(type_name, "char") != 0) {
-=======
 				strcmp(type_name, "uint8_t") != 0 &&
 				strcmp(type_name, "int16_t") != 0 &&
 				strcmp(type_name, "uint16_t") != 0 &&
@@ -1766,9 +1757,8 @@ void Logger::write_format(LogType type, const orb_metadata &meta, WrittenFormats
 				strcmp(type_name, "float") != 0 &&
 				strcmp(type_name, "double") != 0 &&
 				strcmp(type_name, "bool") != 0 &&
-				strcmp(type_name, "char") != 0) {
->>>>>>> DGXY
-
+        strcmp(type_name, "char") != 0) {
+      
 			// find orb meta for type
 			const orb_metadata *const *topics = orb_get_topics();
 			const orb_metadata *found_topic = nullptr;

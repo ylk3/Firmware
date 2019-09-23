@@ -84,12 +84,9 @@ px4_add_board(
 		sih
 		vmount
 		vtol_att_control
-<<<<<<< HEAD
 		airspeed_selector
-=======
 		wind_estimator
 		rw_uart
->>>>>>> DGXY
 
 	SYSTEMCMDS
 		bl_update
