@@ -1175,7 +1175,12 @@ Commander::set_home_position_alt_only()
 void
 Commander::run()
 {
-	bool sensor_fail_tune_played = false;
+    //DG rc_mag_cali flags
+    uint8_t mode_slot_pre = 0;
+    uint64_t timestamp_pre =0;
+    int mode_chage_count = 0;
+
+    bool sensor_fail_tune_played = false;
 	bool arm_tune_played = false;
 	bool was_landed = true;
 	bool was_falling = false;
@@ -1280,8 +1285,6 @@ Commander::run()
 	int subsys_sub = orb_subscribe(ORB_ID(subsystem_info));
 	int system_power_sub = orb_subscribe(ORB_ID(system_power));
 	int vtol_vehicle_status_sub = orb_subscribe(ORB_ID(vtol_vehicle_status));
-  int arm_disarm_sub = orb_subscribe(ORB_ID(arm_disarm));
-
 
 	geofence_result_s geofence_result {};
 
@@ -1516,7 +1519,34 @@ Commander::run()
 
 		sp_man_sub.update(&sp_man);
 
-		offboard_control_update(status_changed);
+
+		if (updated) {
+			orb_copy(ORB_ID(manual_control_setpoint), sp_man_sub, &sp_man);
+
+            // DG_rc_mag_cali code
+            if (abs(sp_man.mode_slot - mode_slot_pre) == 5){
+                if(sp_man.timestamp - timestamp_pre < 500000){
+                    mode_chage_count++;
+                }
+                else
+                    mode_chage_count = 0;
+                timestamp_pre = sp_man.timestamp;
+                }
+                if (mode_chage_count >3)
+                {
+                    mode_chage_count = 0;
+                    if(status.arming_state <2) do_mag_calibration(&mavlink_log_pub);
+                }
+                if (sp_man.mode_slot != 3) mode_slot_pre = sp_man.mode_slot;
+            }
+
+		orb_check(offboard_control_mode_sub, &updated);
+
+		if (updated) {
+			offboard_control_mode_s old = offboard_control_mode;
+			orb_copy(ORB_ID(offboard_control_mode), offboard_control_mode_sub, &offboard_control_mode);
+		  offboard_control_update(status_changed);
+
 
 		if (system_power_sub.updated()) {
 			system_power_s system_power = {};
@@ -1579,26 +1609,26 @@ Commander::run()
 			}
 		}
 
-        /* update DG arm_disarm status*/
-        orb_check(arm_disarm_sub, &updated);
-        if(updated){
-            struct arm_disarm_s arm_disarm_status;
-            arm_disarm_status.arm_disarm = was_armed;
-            orb_copy(ORB_ID(arm_disarm), arm_disarm_sub, &arm_disarm_status);
-            warnx("_missle_ctrl.cmd_id:%d", arm_disarm_status.arm_disarm);
-            if(arm_disarm_status.arm_disarm)
-            {
-                if (TRANSITION_CHANGED != arm_disarm(true, &mavlink_log_pub, "command line")) {
-                    warnx("arming failed");
-                }
-            }
-            else
-            {
-                if (TRANSITION_DENIED == arm_disarm(false, &mavlink_log_pub, "command line")) {
-                    warnx("rejected disarm");
-                }
-            }
-        }
+//        /* update DG arm_disarm status*/
+//        orb_check(arm_disarm_sub, &updated);
+//        if(updated){
+//            struct arm_disarm_s arm_disarm_status;
+//            arm_disarm_status.arm_disarm = was_armed;
+//            orb_copy(ORB_ID(arm_disarm), arm_disarm_sub, &arm_disarm_status);
+//            warnx("_missle_ctrl.cmd_id:%d", arm_disarm_status.arm_disarm);
+//            if(arm_disarm_status.arm_disarm)
+//            {
+//                if (TRANSITION_CHANGED != arm_disarm(true, &mavlink_log_pub, "command line")) {
+//                    warnx("arming failed");
+//                }
+//            }
+//            else
+//            {
+//                if (TRANSITION_DENIED == arm_disarm(false, &mavlink_log_pub, "command line")) {
+//                    warnx("rejected disarm");
+//                }
+//            }
+//        }
 
 		/* update vtol vehicle status*/
 		if (vtol_vehicle_status_sub.updated()) {
@@ -1972,16 +2002,16 @@ Commander::run()
 			 * and we are in MANUAL, Rattitude, or AUTO_READY mode or (ASSIST mode and landed)
 			 * do it only for rotary wings in manual mode or fixed wing if landed.
 			 * Disable stick-disarming if arming switch or button is mapped */
-			const bool stick_in_lower_left = sp_man.r < -STICK_ON_OFF_LIMIT && sp_man.z < 0.1f
-							 && !arm_switch_or_button_mapped;
+            const bool stick_in_inner_eight = sp_man.r > STICK_ON_OFF_LIMIT && sp_man.z < 0.1f && sp_man.x < -STICK_ON_OFF_LIMIT && sp_man.y < -STICK_ON_OFF_LIMIT
+                             && !arm_switch_or_button_mapped;
 			const bool arm_switch_to_disarm_transition =  arm_switch_is_button == 0 &&
 					_last_sp_man_arm_switch == manual_control_setpoint_s::SWITCH_POS_ON &&
 					sp_man.arm_switch == manual_control_setpoint_s::SWITCH_POS_OFF;
 
 			if (in_armed_state &&
 			    status.rc_input_mode != vehicle_status_s::RC_IN_MODE_OFF &&
-			    (status.vehicle_type == vehicle_status_s::VEHICLE_TYPE_ROTARY_WING || land_detector.landed) &&
-			    (stick_in_lower_left || arm_button_pressed || arm_switch_to_disarm_transition)) {
+			    (status.is_rotary_wing || (!status.is_rotary_wing && land_detector.landed)) &&
+                (stick_in_inner_eight || arm_button_pressed || arm_switch_to_disarm_transition)) {
 
 				if (internal_state.main_state != commander_state_s::MAIN_STATE_MANUAL &&
 				    internal_state.main_state != commander_state_s::MAIN_STATE_ACRO &&
@@ -2007,8 +2037,8 @@ Commander::run()
 			 * check if left stick is in lower right position or arm button is pushed or arm switch has transition from disarm to arm
 			 * and we're in MANUAL mode.
 			 * Disable stick-arming if arming switch or button is mapped */
-			const bool stick_in_lower_right = sp_man.r > STICK_ON_OFF_LIMIT && sp_man.z < 0.1f
-							  && !arm_switch_or_button_mapped;
+            const bool stick_in_outer_eight = sp_man.r < -STICK_ON_OFF_LIMIT && sp_man.z < 0.1f&& sp_man.x < -STICK_ON_OFF_LIMIT && sp_man.y > STICK_ON_OFF_LIMIT
+                              && !arm_switch_or_button_mapped;
 			/* allow a grace period for re-arming: preflight checks don't need to pass during that time,
 			 * for example for accidential in-air disarming */
 			const bool in_arming_grace_period = last_disarmed_timestamp != 0 && hrt_elapsed_time(&last_disarmed_timestamp) < 5_s;
@@ -2019,7 +2049,7 @@ Commander::run()
 
 			if (!in_armed_state &&
 			    status.rc_input_mode != vehicle_status_s::RC_IN_MODE_OFF &&
-			    (stick_in_lower_right || arm_button_pressed || arm_switch_to_arm_transition)) {
+                (stick_in_outer_eight || arm_button_pressed || arm_switch_to_arm_transition)) {
 				if ((stick_on_counter == rc_arm_hyst && stick_off_counter < rc_arm_hyst) || arm_switch_to_arm_transition) {
 
 					/* we check outside of the transition function here because the requirement
@@ -2761,6 +2791,28 @@ Commander::set_main_state_rc(const vehicle_status_s &status_local, bool *changed
 			res = TRANSITION_NOT_CHANGED;
 
 		} else {
+            switch (sp_man.mode_slot)
+                           {
+                               case 0:
+                               case 1:
+                                     if(sp_man.mode_switch==manual_control_setpoint_s::SWITCH_POS_OFF)
+                                        new_mode=commander_state_s::MAIN_STATE_POSCTL;
+                                     else if(sp_man.mode_switch==manual_control_setpoint_s::SWITCH_POS_MIDDLE)
+                                         new_mode=commander_state_s::MAIN_STATE_AUTO_MISSION;
+                                     else
+                                         new_mode=commander_state_s::MAIN_STATE_AUTO_RTL;
+                                     break;
+                               case 2:
+                               case 3:
+                                     new_mode=commander_state_s::MAIN_STATE_ALTCTL;
+                                     break;
+                               case 5:
+                               case 6:
+                                     new_mode=commander_state_s::MAIN_STATE_MANUAL;
+                                     break;
+                               default:
+                                   return TRANSITION_DENIED;
+                           }
 			res = main_state_transition(status_local, new_mode, status_flags, &internal_state);
 
 			/* ensure that the mode selection does not get stuck here */
@@ -3131,13 +3183,6 @@ Commander::update_control_mode()
 		control_mode.flag_control_attitude_enabled = true;
 		break;
 
-	case vehicle_status_s::NAVIGATION_STATE_RATTITUDE:
-		control_mode.flag_control_manual_enabled = true;
-		control_mode.flag_control_rates_enabled = true;
-		control_mode.flag_control_attitude_enabled = true;
-		control_mode.flag_control_rattitude_enabled = true;
-		break;
-
 	case vehicle_status_s::NAVIGATION_STATE_ALTCTL:
 		control_mode.flag_control_manual_enabled = true;
 		control_mode.flag_control_rates_enabled = true;
@@ -3146,7 +3191,9 @@ Commander::update_control_mode()
 		control_mode.flag_control_climb_rate_enabled = true;
 		break;
 
-	case vehicle_status_s::NAVIGATION_STATE_POSCTL:
+    case vehicle_status_s::NAVIGATION_STATE_RATTITUDE:
+    case vehicle_status_s::NAVIGATION_STATE_ACRO:
+    case vehicle_status_s::NAVIGATION_STATE_POSCTL:
 		control_mode.flag_control_manual_enabled = true;
 		control_mode.flag_control_rates_enabled = true;
 		control_mode.flag_control_attitude_enabled = true;
@@ -3154,6 +3201,9 @@ Commander::update_control_mode()
 		control_mode.flag_control_climb_rate_enabled = true;
 		control_mode.flag_control_position_enabled = !status.in_transition_mode;
 		control_mode.flag_control_velocity_enabled = !status.in_transition_mode;
+		control_mode.flag_control_acceleration_enabled = false;
+        control_mode.flag_control_termination_enabled = false;
+        status.nav_state = vehicle_status_s::NAVIGATION_STATE_POSCTL;
 		break;
 
 	case vehicle_status_s::NAVIGATION_STATE_AUTO_RTL:
@@ -3183,11 +3233,6 @@ Commander::update_control_mode()
 		control_mode.flag_control_rates_enabled = true;
 		control_mode.flag_control_attitude_enabled = true;
 		control_mode.flag_control_climb_rate_enabled = true;
-		break;
-
-	case vehicle_status_s::NAVIGATION_STATE_ACRO:
-		control_mode.flag_control_manual_enabled = true;
-		control_mode.flag_control_rates_enabled = true;
 		break;
 
 	case vehicle_status_s::NAVIGATION_STATE_DESCEND:
