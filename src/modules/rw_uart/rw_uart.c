@@ -15,6 +15,7 @@ static pthread_mutex_t mutex;
 int uart_read;
 uint8_t param_saved[62];
 Waypoint_saved wp_data;
+
 MSG_orb_sub msg_fd;
 MSG_orb_data msg_data;
 MSG_orb_pub msg_pd;
@@ -28,6 +29,7 @@ void msg_orb_sub (void);
 void msg_orb_data(void);
 void msg_orb_unsub (void);
 void msg_param_hd_cache (void);
+void wp_data_init(void);
 
 /**
  * Mainloop of daemon.
@@ -73,7 +75,8 @@ int set_rw_uart_baudrate(const int fd, unsigned int baud)
         uart_config.c_oflag &= ~ONLCR;// 将NL转换成CR(回车)-NL后输出。
 
         /* 无偶校验，一个停止位 */
-        uart_config.c_cflag &= ~(CSTOPB | PARENB);// CSTOPB 使用两个停止位，PARENB 表示偶校验
+        uart_config.c_cflag &= ~(CSTOPB | PARENB | CRTSCTS);
+        // CSTOPB 使用两个停止位，PARENB 表示偶校验, CRTSCTS 使用流控
 
         cfmakeraw(&uart_config);
 
@@ -99,8 +102,8 @@ int set_rw_uart_baudrate(const int fd, unsigned int baud)
 
 int rw_uart_init (void)
 {
-       char *uart_name = "/dev/ttyS3";
-       //char *uart_name = "/dev/ttyS2";
+       //char *uart_name = "/dev/ttyS3";
+       char *uart_name = "/dev/ttyS1";
        int serial_fd = open(uart_name, O_RDWR | O_NONBLOCK | O_NOCTTY);
        //int serial_fd = open(uart_name, O_RDWR | O_NOCTTY);
         // 选项 O_NOCTTY 表示不能把本串口当成控制终端，否则用户的键盘输入信息将影响程序的执行
@@ -115,6 +118,7 @@ int rw_uart_init (void)
 
 void msg_orb_sub (void)
 {
+    memset(&msg_fd, 0, sizeof(msg_fd));
     msg_fd.arm_fd = orb_subscribe(ORB_ID(actuator_armed));
     msg_fd.gps_fd = orb_subscribe(ORB_ID(vehicle_gps_position));
     msg_fd.command_fd = orb_subscribe(ORB_ID(vehicle_command));
@@ -131,6 +135,7 @@ void msg_orb_sub (void)
     msg_fd.vibe_fd = orb_subscribe(ORB_ID(estimator_status));
     msg_fd.global_position_fd = orb_subscribe(ORB_ID(vehicle_global_position));
     msg_fd.attitude_sp_fd = orb_subscribe(ORB_ID(vehicle_attitude_setpoint));
+    msg_fd.home_position_fd = orb_subscribe(ORB_ID(home_position));
 }
 
 
@@ -152,6 +157,7 @@ void msg_orb_data(void)
    orb_copy(ORB_ID(estimator_status), msg_fd.vibe_fd, &msg_data.vibe_data);
    orb_copy(ORB_ID(vehicle_global_position), msg_fd.global_position_fd, &msg_data.global_position_data);
    orb_copy(ORB_ID(vehicle_attitude_setpoint), msg_fd.attitude_sp_fd, &msg_data.attitude_sp_data);
+   orb_copy(ORB_ID(home_position), msg_fd.home_position_fd, &msg_data.home_position_data);
 }
 
 void msg_orb_unsub (void)
@@ -172,20 +178,31 @@ void msg_orb_unsub (void)
     orb_unsubscribe(msg_fd.vibe_fd);
     orb_unsubscribe(msg_fd.global_position_fd);
     orb_unsubscribe(msg_fd.attitude_sp_fd);
+    orb_unsubscribe(msg_fd.home_position_fd);
 }
 
 void msg_param_hd_cache (void)
 {
+    memset(&msg_hd, 0, sizeof(msg_hd));
     msg_hd.roll_p_hd = param_find("MC_ROLLRATE_P");
     msg_hd.roll_i_hd = param_find("MC_ROLLRATE_I");
     msg_hd.roll_d_hd = param_find("MC_ROLLRATE_D");
     msg_hd.pitch_p_hd = param_find("MC_PITCHRATE_P");
     msg_hd.pitch_i_hd = param_find("MC_PITCHRATE_I");
     msg_hd.pitch_d_hd = param_find("MC_PITCHRATE_D");
-    msg_hd.yaw_p_hd = param_find("MC_YAWRATE_P");
-    msg_hd.yaw_i_hd = param_find("MC_YAWRATE_I");
-    msg_hd.yaw_d_hd = param_find("MC_YAWRATE_D");
+//    msg_hd.yaw_p_hd = param_find("MC_YAWRATE_P");
+//    msg_hd.yaw_i_hd = param_find("MC_YAWRATE_I");
+//    msg_hd.yaw_d_hd = param_find("MC_YAWRATE_D");
+    msg_hd.hor_p_hd = param_find("MPC_XY_VEL_P");
+    msg_hd.hor_i_hd = param_find("MPC_XY_VEL_I");
+    msg_hd.hor_d_hd = param_find("MPC_XY_VEL_D");
+    msg_hd.ver_p_hd = param_find("MPC_Z_VEL_P");
+    msg_hd.ver_i_hd = param_find("MPC_Z_VEL_I");
+    msg_hd.ver_d_hd = param_find("MPC_Z_VEL_D");
+    msg_hd.throttle_hd = param_find("THR_MDL_FAC");
+    msg_hd.xy_p_hd = param_find("MPC_XY_P");
     msg_hd.z_p_hd = param_find("MPC_Z_P");
+    msg_hd.throttle_hd = param_find("THR_MDL_FAC");
     msg_hd.up_vel_max_hd = param_find("MPC_Z_VEL_MAX_UP");
     msg_hd.xy_vel_max_hd = param_find("MPC_VEL_MANUAL");
     msg_hd.roll_rate_hd = param_find("MC_ROLLRATE_MAX");
@@ -193,14 +210,19 @@ void msg_param_hd_cache (void)
     msg_hd.yaw_rate_hd = param_find("MC_YAWRATE_MAX");
     msg_hd.acc_up_max_hd = param_find("MPC_ACC_UP_MAX");
     msg_hd.yaw_max_hd = param_find("MPC_MAN_Y_MAX");
+    msg_hd.yaw_fast_hd = param_find("MC_YAWRATE_MAX");
     msg_hd.roll_max_hd = param_find("MPC_MAN_TILT_MAX");
     msg_hd.pitch_max_hd =param_find("MPC_TILTMAX_AIR");
+    msg_hd.att_r_hd = param_find("MC_ROLL_P");
+    msg_hd.att_p_hd = param_find("MC_PITCH_P");
     msg_hd.higt_max_hd = param_find("GF_MAX_VER_DIST");
     msg_hd.acc_hor_max_hd = param_find("MPC_ACC_HOR_MAX");
     msg_hd.dist_max_hd = param_find("GF_MAX_HOR_DIST");
     msg_hd.mav_type_hd = param_find("SYS_AUTOSTART");
     msg_hd.battery_n_cells_hd = param_find("BAT_N_CELLS");
-    msg_hd.battery_warn_hd = param_find("BAT_LOW_THR");
+    //msg_hd.battery_warn_hd = param_find("BAT_LOW_THR");
+    //msg_hd.battery_crit_hd = param_find("BAT_CRIT_THR");
+    msg_hd.battery_crit_hd = param_find("BAT_V_WARNING_DG");
     msg_hd.battery_fail_hd = param_find("COM_LOW_BAT_ACT");
     msg_hd.rc_lost_act_hd = param_find("NAV_RCL_ACT");
     msg_hd.dn_vel_max_hd = param_find("MPC_Z_VEL_MAX_DN");
@@ -208,6 +230,16 @@ void msg_param_hd_cache (void)
     //msg_hd->hover_thrust_hd = param_find("MPC_THR_HOVER");
     msg_hd.yaw_force_hd = param_find("MPC_YAW_MODE");
     msg_hd.pwm_min_hd = param_find("PWM_MIN");
+}
+
+void wp_data_init(void)
+{
+    memset(&wp_data, 0, sizeof(wp_data));
+    wp_data.push = wp_data.setd;
+    param_t cruise_speed_hd =  param_find("MPC_XY_CRUISE");
+    float_t paramf;
+    param_get(cruise_speed_hd, &paramf);
+    wp_data.speed_pre = (uint8_t)(paramf*10);
 }
 
 int read_to_buff(uint8_t *buffer, int start, int end)
@@ -327,9 +359,6 @@ static void *receive_loop(void *arg)
             uint8_t buffer_move[150] = {};
             memcpy(buffer_move, &buffer[read_finish], (size_t)remain);
             memcpy(buffer, buffer_move, sizeof(buffer_move));
-//            if (find_type_finish >= 0) usleep(20000);
-//           if (find_type_finish < 0) usleep(1000);
-//           else usleep(5000);
         }
     }
     return NULL;
@@ -345,7 +374,7 @@ void receive_start(pthread_t *thread)
     param.sched_priority = SCHED_PRIORITY_MAX - 80;
     (void)pthread_attr_setschedparam(&receiveloop_attr, &param);
 
-    pthread_attr_setstacksize(&receiveloop_attr, PX4_STACK_ADJUSTED(4000));
+    pthread_attr_setstacksize(&receiveloop_attr, PX4_STACK_ADJUSTED(6000));
     pthread_create(thread, &receiveloop_attr, receive_loop, NULL);
 
     pthread_attr_destroy(&receiveloop_attr);
@@ -371,33 +400,18 @@ int rw_uart_thread_main(int argc, char *argv[])
          printf("uart init is successful\n");
 
         //MSG_orb_sub msg_fd;
-        memset(&msg_fd, 0, sizeof(msg_fd));
         msg_orb_sub();
 
         //MSG_orb_pub msg_pd;
         memset(&msg_pd, 0, sizeof(msg_pd));
 
         //MSG_param_hd msg_hd;
-        memset(&msg_hd, 0, sizeof(msg_hd));
         msg_param_hd_cache();
 
-        //MSG_orb_data msg_data;
-
-//        uint8_t buffer[65];
-
-        //uint8_t data;
-
-//        px4_pollfd_struct_t fds[] = {
-//               { .fd = uart_read,   .events = POLLIN },
-//           };
-
-//        int error_counter = 0;
+        wp_data_init();
 
         memset(param_saved, 0, sizeof(param_saved));
         msg_param_saved_get(msg_hd);
-
-        memset(&wp_data, 0, sizeof(wp_data));
-        wp_data.push = wp_data.setd;
 
         pthread_mutex_init(&mutex, NULL);
 
@@ -411,10 +425,6 @@ int rw_uart_thread_main(int argc, char *argv[])
 
         while (!rw_thread_should_exit)
         {
-            //data = 0;
-            //memset(buffer, 0, sizeof(buffer));
-
-            //if (hrt_absolute_time() - last_time_send  > 200000)
             {
                 pthread_mutex_lock(&mutex);
                 memset(&msg_data, 0, sizeof(msg_data));
@@ -425,38 +435,6 @@ int rw_uart_thread_main(int argc, char *argv[])
                 //fflush(stdout);
                 usleep(100000);
             }
-
-//            int poll_ret = poll(fds,1,10);//阻塞等待10ms
-//            if (poll_ret == 0)
-//            {
-//                    /* this means none of our providers is giving us data */
-//                  //printf("No receive data for 10ms\n");
-//            } else if (poll_ret < 0)
-//            {
-//               /* this is seriously bad - should be an emergency */
-//               if (error_counter < 10 || error_counter % 50 == 0)
-//               {
-//                       /* use a counter to prevent flooding (and slowing us down) */
-//                       printf("ERROR return value from poll(): %d\n", poll_ret);
-//               }
-//                   error_counter++;
-//            }
-//            else
-//            {
-//               if (fds[0].revents & POLLIN)
-//               {
-                       /*接收服务系统发过来的消息*/
-                       //read(uart_read,&data,1);//读取串口数据
-//                        read_to_buff(buffer, 0, 1);
-//                       if(buffer[0] == '$')
-//                       {//找到帧头$
-//                               buffer[0] = '$';
-//                               if (read_to_buff(buffer, 1, 5)) find_r_type(buffer, &msg_data, &msg_pd, msg_hd);
-//                       }
-                       //printf("data=%s\n", buffer);
-//                       usleep(50000);
-//               }
-//            }
         }
 
         msg_orb_unsub();

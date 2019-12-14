@@ -119,6 +119,7 @@ private:
 		(ParamInt<px4::params::COM_POS_FS_GAIN>) _param_com_pos_fs_gain,
 
 		(ParamInt<px4::params::COM_LOW_BAT_ACT>) _param_com_low_bat_act,
+        //(ParamFloat<px4::params::BAT_V_WARNING_DG>) _param_bat_warnning_dg,
 		(ParamFloat<px4::params::COM_DISARM_LAND>) _param_com_disarm_land,
 
 		(ParamInt<px4::params::COM_OBS_AVOID>) _param_com_obs_avoid,

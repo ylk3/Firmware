@@ -85,10 +85,10 @@ uint8_t get_control_status(uint16_t command, uint8_t nav_state){
 
 uint8_t get_warnning (bool geofence_violated, uint8_t warning, bool rc_lost ){
     uint8_t result = 0x00;
-    if (warning == 1){
+    if (warning >= 1){
         result |=0x01;
     }
-    if (warning == 2){
+    if (warning == 3){
         result |=0x02;
     }
     if (geofence_violated == true){
@@ -127,11 +127,11 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
     stp->wp_total = (uint16_t)stp_data.mission_data.seq_total;
 
     if ((stp_data.status_data.nav_state == 2 ||  stp_data.status_data.nav_state == 4)
-         && stp_data.manual_data.mode_switch == 2)
-        stp->control_status = get_control_status (stp_data.command_data.command, 3);
-    else if ((stp_data.status_data.nav_state == 2 ||  stp_data.status_data.nav_state == 4)
              && stp_data.manual_data.mode_slot == 5)
         stp->control_status = 0x0c;
+    else if ((stp_data.status_data.nav_state == 2 ||  stp_data.status_data.nav_state == 4)
+         && stp_data.manual_data.mode_switch == 2)
+        stp->control_status = 0x02;
     else
         stp->control_status = get_control_status (stp_data.command_data.command, stp_data.status_data.nav_state);
 
@@ -157,7 +157,7 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
         stp->sp_yaw =(uint8_t)(stp_data.attitude_sp_data.yaw_sp_move_rate*57.3/paramf* 50.0 + 150.0);
         }
 
-    stp->local_z_sp = -(int16_t)(stp_data.local_position_sp_data.z * 10.0);
+    stp->local_z_sp = -(int16_t)(stp_data.local_position_sp_data.z * 10.0) ;
 
     float_t distance = (float_t) sqrtl(stp_data.local_position_data.z * stp_data.local_position_data.z + stp_data.local_position_data.x * stp_data.local_position_data.x
                              + stp_data.local_position_data.y * stp_data.local_position_data.y);
@@ -212,11 +212,11 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
     stp->rc_roll_mid = 150;
     stp->rc_yaw_mid = 150;
 
-    stp->version =0x0581;
+    stp->version = DG_VERSION;
     stp->sum_check=0x00;
 
     //stp->local_z_pressure =  (int16_t)(stp_data.air_data.baro_alt_meter * 10.0);
-    stp->local_z_pressure =  -(int16_t)(stp_data.local_position_data.z * 10.0);
+    stp->local_z_pressure =  -(int16_t)((stp_data.local_position_data.z - stp_data.home_position_data.z) * 10.0);
     stp->temprature = (int8_t)(stp_data.air_data.baro_temp_celcius);
 
     stp->battery_voltage = (uint16_t)(stp_data.battery_data.voltage_filtered_v/20.0 * 4096.0);
@@ -276,20 +276,36 @@ void yfpa_param_pack(YFPA_param *yfpa_param, MSG_param_hd msg_hd){
     yfpa_param->roll_i = (uint8_t)(paramf * 2550.0);
     param_get(msg_hd.roll_d_hd, &paramf);
     yfpa_param->roll_d = (uint8_t)(paramf * 25500.0);
-    param_get(msg_hd.pitch_p_hd, &paramf);
-    yfpa_param->pitch_p = (uint8_t)(paramf * 510.0);
-    param_get(msg_hd.pitch_i_hd, &paramf);
-    yfpa_param->pitch_i = (uint8_t)(paramf * 2550.0);
-    param_get(msg_hd.pitch_d_hd, &paramf);
-    yfpa_param->pitch_d = (uint8_t)(paramf * 25500.0);
-    param_get(msg_hd.yaw_p_hd, &paramf);
-    yfpa_param->yaw_p = (uint8_t)(paramf *510.0);
-    param_get(msg_hd.yaw_i_hd, &paramf);
-    yfpa_param->yaw_i = (uint8_t)(paramf *1275.0);
-    param_get(msg_hd.yaw_d_hd, &paramf);
-    yfpa_param->yaw_d = (uint8_t)(paramf *25500.0);
+//    param_get(msg_hd.pitch_p_hd, &paramf);
+//    yfpa_param->pitch_p = (uint8_t)(paramf * 510.0);
+//    param_get(msg_hd.pitch_i_hd, &paramf);
+//    yfpa_param->pitch_i = (uint8_t)(paramf * 2550.0);
+//    param_get(msg_hd.pitch_d_hd, &paramf);
+//    yfpa_param->pitch_d = (uint8_t)(paramf * 25500.0);
+//    param_get(msg_hd.yaw_p_hd, &paramf);
+//    yfpa_param->yaw_p = (uint8_t)(paramf *510.0);
+//    param_get(msg_hd.yaw_i_hd, &paramf);
+//    yfpa_param->yaw_i = (uint8_t)(paramf *1275.0);
+//    param_get(msg_hd.yaw_d_hd, &paramf);
+//    yfpa_param->yaw_d = (uint8_t)(paramf *25500.0);
+    param_get(msg_hd.hor_p_hd, &paramf);
+    yfpa_param->hor_p = (uint8_t)((paramf -0.06)*2834.0);
+    param_get(msg_hd.hor_i_hd, &paramf);
+    yfpa_param->hor_i = (uint8_t)(paramf * 255.0/3.0);
+    param_get(msg_hd.hor_d_hd, &paramf);
+    yfpa_param->hor_d = (uint8_t)((paramf - 0.005)*2684.0);
+    param_get(msg_hd.ver_p_hd, &paramf);
+    yfpa_param->ver_p = (uint8_t)((paramf -0.1)*850.0);
+    param_get(msg_hd.ver_i_hd, &paramf);
+    yfpa_param->ver_i = (uint8_t)((paramf -0.01)*2834.0);
+    param_get(msg_hd.ver_d_hd, &paramf);
+    yfpa_param->ver_d = (uint8_t)(paramf*2550.0);
+    param_get(msg_hd.throttle_hd, &paramf);
+    yfpa_param->throttle_p = (uint8_t)(paramf * 255.0);
+    param_get(msg_hd.xy_p_hd, &paramf);
+    yfpa_param->xy_p = (uint8_t)(paramf * 255.0/2.0);
     param_get(msg_hd.z_p_hd, &paramf);
-    yfpa_param->z_p = (uint8_t)(paramf * 170.0);
+    yfpa_param->z_p = (uint8_t)(paramf * 255.0/1.5);
     param_get(msg_hd.yaw_force_hd, &paramd);
     yfpa_param->yaw_mode =(uint8_t)(paramd);
     param_get(msg_hd.up_vel_max_hd, &paramf);
@@ -308,10 +324,12 @@ void yfpa_param_pack(YFPA_param *yfpa_param, MSG_param_hd msg_hd){
     yfpa_param->acc_up_max = (uint8_t)((paramf - 2.0)* 19.61);
     param_get(msg_hd.yaw_max_hd, &paramf);
     yfpa_param->yaw_max = (uint8_t)(paramf);
-    param_get(msg_hd.roll_max_hd, &paramf);
-    yfpa_param->roll_max = (uint8_t)(paramf * 2.83);
+//    param_get(msg_hd.roll_max_hd, &paramf);
+//    yfpa_param->roll_max = (uint8_t)(paramf);
+    param_get(msg_hd.att_r_hd, &paramf);
+    yfpa_param->att_p = (uint8_t)(paramf/12.0 *255.0);
     param_get(msg_hd.pitch_max_hd, &paramf);
-    yfpa_param->pitch_max = (uint8_t)(paramf * 2.83);
+    yfpa_param->pitch_max = (uint8_t)(paramf);
     param_get(msg_hd.higt_max_hd, &paramf);
     //yfpa_param->higt_max = (uint16_t)( paramf * 6.5535);
     yfpa_param->higt_max = (uint16_t)(paramf);
@@ -324,9 +342,10 @@ void yfpa_param_pack(YFPA_param *yfpa_param, MSG_param_hd msg_hd){
      yfpa_param->mav_type = get_frame(paramd);
     param_get(msg_hd.battery_n_cells_hd, &paramd);
     yfpa_param->battery_num = (uint8_t)(paramd);
-    param_get(msg_hd.battery_warn_hd, &paramf);
-    paramf = 3.50 + 0.55 *paramf;
-    yfpa_param->battery_warn = (uint8_t)((paramf - 3.55)/0.05 *4);
+    param_get(msg_hd.battery_crit_hd, &paramf);
+    //paramf = 3.50 + 0.55 *paramf;
+    yfpa_param->battery_warn = ((uint8_t)((paramf - 3.54)/0.05))<<2;
+    printf("battery_warn is %d\n", yfpa_param->battery_warn);
     param_get(msg_hd.battery_fail_hd, &paramd);
     int fail_act = 0;
     switch (paramd) {
@@ -339,9 +358,12 @@ void yfpa_param_pack(YFPA_param *yfpa_param, MSG_param_hd msg_hd){
     case 2:
         fail_act = 0x05;
         break;
-//    case 3:
-//        fail_act = 0x00;
-//        break;
+    case 3:
+        fail_act = 0x00;
+        break;
+    case 4:
+        fail_act = 0x02;
+        break;
     default:
         fail_act = 0x00;
         break;

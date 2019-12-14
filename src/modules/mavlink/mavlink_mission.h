@@ -102,6 +102,8 @@ public:
 
     void handle_mission_set_current(const mavlink_message_t *msg);
 
+    void add_transfer_count(void);
+
 private:
 	enum MAVLINK_WPM_STATES _state {MAVLINK_WPM_STATE_IDLE};	///< Current state
 	enum MAV_MISSION_TYPE _mission_type {MAV_MISSION_TYPE_MISSION};	///< mission type of current transmission (only one at a time possible)

@@ -175,7 +175,7 @@ void wp_save(MSG_orb_pub *msg_pd){
     mission_item.timestamp = hrt_absolute_time();
     mission_item.msg_type = 0; //DG_MISSION_MSG
     mission_item.frame = 3; //MAV_FRAME_GLOBAL_RELATIVE_ALT
-    mission_item.seq = wp_data.push->waypoint_seq -1;
+    mission_item.seq = wp_data.push->waypoint_seq -1;//+ wp_data.seq_offset;
     mission_item.current = mission_item.seq == 0 ? 1: 0;
     mission_item.mission_type = 0; //MAV_MISSION_TYPE_MISSION
     mission_item.autocontinue = wp_data.push->waypoint_seq < wp_data.total_num ? 1: 0;
@@ -193,6 +193,22 @@ void wp_save(MSG_orb_pub *msg_pd){
     mission_item.param4 = NAN;
     //mission_item.param4 = wrap_2pi(math::radians( wp_data.push->yaw));
     mission_item.cruise_speed = ((float_t)wp_data.push->cruise_speed) /10.0;
+
+    publish_dg_mission_pd(msg_pd, &mission_item);
+}
+
+void wp_change_speed(MSG_orb_pub *msg_pd){
+    struct dg_mission_s mission_item = {};
+    mission_item.timestamp = hrt_absolute_time();
+    mission_item.msg_type = 4; //DG_MISSION_CHANGE_SPEED
+    mission_item.frame = 2; //MAV_FRAME_MISSION
+    mission_item.seq = wp_data.push->waypoint_seq -1;//+ wp_data.seq_offset;
+    mission_item.mission_type = 0; //MAV_MISSION_TYPE_MISSION
+    mission_item.target_system =1;
+    mission_item.target_component =1;
+
+    mission_item.command = NAV_CMD_DO_CHANGE_SPEED;
+    mission_item.param2 = ((float_t)wp_data.push->cruise_speed) /10.0;
 
     publish_dg_mission_pd(msg_pd, &mission_item);
 }
@@ -248,15 +264,12 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
             set_command_param(&msg_data->command_data, 22, 0, 0, 0, NAN,
                               (msg_data->global_position_data.lat),
                               (msg_data->global_position_data.lon),
-                              (msg_data->global_position_data.alt + 5.0));
+                              (msg_data->home_position_data.alt + 5.0));
             publish_commander_pd(msg_pd, msg_data);
             printf("Passing takeoff\n");
             break;
         case WIFI_COMM_WP_UPLOAD:
             printf("Start upload\n");
-//            if (*(uint16_t*)((uint32_t)buffer + 6) > wp_data.total_num){
-//                printf("Wrong waypoints sequece\n");
-//            }else
             {
                 uint8_t newpoint;
                 if (wp_data.setd[*(uint16_t*)((uint32_t)buffer + 6) -1].waypoint_seq > 0){
@@ -268,16 +281,21 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
                 wp_data.push->head[2] = 'E';
                 wp_data.push->head[3] = 'T';
                 wp_data.push->head[4] = 'D';
+                wp_data.push->cruise_speed = buffer[22];
                 wp_data.push->waypoint_seq = *(uint16_t*)((uint32_t)buffer + 6);
                 wp_data.push->lat = *(int32_t*)((uint32_t)buffer + 8);
                 wp_data.push->lon = *(int32_t*)((uint32_t)buffer + 12);
                 wp_data.push->alt = *(int32_t*)((uint32_t)buffer + 16);
                 wp_data.push->loiter_time = * (uint16_t*)((uint32_t)buffer + 20);
-                wp_data.push->cruise_speed = buffer[22];
                 wp_data.push->photo_set = buffer[23];
                 wp_data.push->photo_dis = buffer[24];
                 wp_data.push->turn_mode = buffer[25];
                 wp_data.num += newpoint;
+//                if (wp_data.push->cruise_speed != wp_data.speed_pre){
+//                    wp_change_speed(msg_pd);
+//                    wp_data.speed_pre = wp_data.push->cruise_speed;
+//                    wp_data.seq_offset ++;
+//                }
                 wp_save(msg_pd);
                 //if (wp_data.num == wp_data.total_num) printf("All waypoints is upload\n");
                 //else wp_data.push = &wp_data.setd[wp_data.num];
@@ -287,6 +305,7 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
             }
             break;
         case WIFI_COMM_WP_UPLOAD_NUM:
+            wp_data_init();
             wp_data.total_num = *(uint16_t*)((uint32_t)buffer + 6);
             printf("Wp total_num is %d\n", wp_data.total_num);
             mission_item.timestamp = hrt_absolute_time();
@@ -354,15 +373,11 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
             break;
         case WIFI_COMM_HIGHT_CHANGE:
             usleep(0);
-            int home_position_fd = orb_subscribe(ORB_ID(home_position));
-            struct home_position_s home_position_data = {};
-            orb_copy(ORB_ID(home_position), home_position_fd, &home_position_data);
             set_command_param(&msg_data->command_data, 192, -1, 1, 0, NAN,
                               (msg_data->global_position_data.lat),
                               (msg_data->global_position_data.lon),
-                              (home_position_data.alt + (float_t)*(int16_t*)((uint32_t)buffer + 7)/10.0));
+                              (msg_data->home_position_data.alt + (float_t)*(int16_t*)((uint32_t)buffer + 7)/10.0));
             publish_commander_pd(msg_pd, msg_data);
-            orb_unsubscribe(home_position_fd);
             printf("Passing hight_change, hight is %.4f\n", (float_t)*(int16_t*)((uint32_t)buffer + 7)/10.0);
             break;
         case WIFI_COMM_ESC_CALI_ON:

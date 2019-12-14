@@ -10,6 +10,8 @@ uint8 DG_MISSION_SET_CURRENT = 2
 
 uint8 DG_MISSION_CLEAR_ALL_MSG = 3
 
+uint8 DG_MISSION_CHANGE_SPEED = 4
+
 
 uint8  msg_type
 

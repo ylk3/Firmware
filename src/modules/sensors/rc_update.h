@@ -118,6 +118,7 @@ private:
     int    _status_sub = -1;
 
     int     _vs_enable_DG = 0;   /**< virtual stick message by DGXY enable*/
+    bool     _vs_last_enable = false;
     uint64_t vs_last_timestamp = 0;
 
 	orb_advert_t	_rc_pub = nullptr;		/**< raw r/c control topic */

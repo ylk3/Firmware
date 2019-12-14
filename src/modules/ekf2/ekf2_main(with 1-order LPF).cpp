@@ -74,8 +74,6 @@
 #include <uORB/topics/vehicle_odometry.h>
 #include <uORB/topics/vehicle_status.h>
 #include <uORB/topics/wind_estimate.h>
-#include <mathlib/math/filter/LowPassFilter2DG.hpp>
-#include <mathlib/math/filter/LowPassFilter3DG.hpp>
 
 // defines used to specify the mask position for use of different accuracy metrics in the GPS blending algorithm
 #define BLEND_MASK_USE_SPD_ACC      1
@@ -85,16 +83,6 @@
 // define max number of GPS receivers supported and 0 base instance used to access virtual 'blended' GPS solution
 #define GPS_MAX_RECEIVERS 2
 #define GPS_BLENDED_INSTANCE 2
-
-//const float a_2nd[2][2] = {{0.7194f, -0.2461f}, {0.2461f, 0.9648f}};
-//const float b_2nd[2] = {0.3270f, 0.0468f};
-//const float c_2nd[2] = {0.0410f, 0.6224f};
-//const float d_2nd = 0.0640f; //cheby2 10-30 1dB-25dB
-
-const float a_3rd[3][3] = {{0.5573f, 0.0f, 0.0f}, {0.5187f,0.5711f,-0.3862f}, {0.1275f, 0.3862f, 0.9051f}};
-const float b_3rd[3] = {0.9339f, 0.3111f, 0.0765f};
-const float c_3rd[3] = {0.0906f, -0.0074f, 0.2073f};
-const float d_3rd = 0.0543f; //cheby2 10-30 1dB-25dB
 
 using math::constrain;
 using namespace time_literals;
@@ -224,33 +212,16 @@ private:
     float _yaw_innov_magnitude_lpf = 0.0f;	///< Preflight low pass filtered yaw innovation magntitude (rad)
 
     //DGX LPF
-//    math::LowPassFilter2DG _filter_gyro_2nd{a_2nd, b_2nd, c_2nd, d_2nd};
-//    math::LowPassFilter2DG _filter_acc_2nd{a_2nd, b_2nd, c_2nd, d_2nd};
-
-    math::LowPassFilter3DG _filter_gyro_3rd{a_3rd, b_3rd, c_3rd, d_3rd};
-    math::LowPassFilter3DG _filter_acc_3rd{a_3rd, b_3rd, c_3rd, d_3rd};
-
-//    float a_3rd_c[3][3] = {{ 0.4316f, 0.0f, 0.0f}, {0.5993f,0.4316f,-0.4854f}, {0.2058f, 0.4854f, 0.8333f}};
-//    float b_3rd_c[3] = {1.9992f, 0.5020f, 0.1724f};
-//    float c_3rd_c[3] = {0.0887f, -0.0075f, 0.2029f};
-//    float d_3rd_c = 0.0743f;  //cheby2 20-40 3dB-25dB
-//    math::LowPassFilter3DG _filter_gyro_3rd_c{a_3rd_c, b_3rd_c, c_3rd_c, d_3rd_c};
-
-//    float a_3rd_e[3][3] = {{0.8113f, 0.0f, 0.0f}, {0.4412f,0.7784f,-0.4641f}, {0.1151f, 0.4641f, 0.8789f}};
-//    float b_3rd_e[3] = {0.7017f, 0.1709f, 0.0446f};
-//    float c_3rd_e[3] = {0.1138f, -0.0097f, 0.1364f};
-//    float d_3rd_e = 0.0441f; //ellip 20-40 3dB-25dB
-//    math::LowPassFilter3DG _filter_gyro_3rd_e{a_3rd_e, b_3rd_e, c_3rd_e, d_3rd_e};
-
     float baro_lpf_data = 0.0f;
-    float mag_lpf_data[3] = {};
+//    float mag_lpf_data[3] = {};
     float acc_lpf_data[3] = {};
     float gyro_lpf_data[3] = {};
     float ka = 0.0f;
-//    float baro_test_data = 0.0f;
-//    float mag_test_data[3] ={};
-//    float acc_test_data[3] ={};
-//    float gyro_test_data[3] ={};
+    float Ga = 0.0f;
+    float baro_test_data = 0.0f;
+    float mag_test_data[3] ={};
+    float acc_test_data[3] ={};
+    float gyro_test_data[3] ={};
 
     static constexpr float _innov_lpf_tau_inv = 0.2f;	///< Preflight low pass filter time constant inverse (1/sec)
     static constexpr float _vel_innov_test_lim =
@@ -815,64 +786,31 @@ void Ekf2::run()
 
         orb_copy(ORB_ID(sensor_combined), _sensors_sub, &sensors);
 
-      //DGX acc&gyro_lpf 1st - order
-//         if(hrt_absolute_time() == 0){
-//             acc_lpf_data[0] = sensors.accelerometer_m_s2[0];
-//             acc_lpf_data[1] = sensors.accelerometer_m_s2[1];
-//             acc_lpf_data[2] = sensors.accelerometer_m_s2[2];
-//             gyro_lpf_data[0] = sensors.gyro_rad[0];
-//             gyro_lpf_data[1] = sensors.gyro_rad[1];
-//             gyro_lpf_data[2] = sensors.gyro_rad[2];
-//         }else{
-//             ka = 0.7f;
-//             acc_lpf_data[0] = (1 - ka) * sensors.accelerometer_m_s2[0] + ka * acc_lpf_data[0];
-//             ka = 0.8f;
-//             acc_lpf_data[1] = (1 - ka) * sensors.accelerometer_m_s2[1] + ka * acc_lpf_data[1];
-//             ka = 0.8f;
-//             acc_lpf_data[2] = (1 - ka) * sensors.accelerometer_m_s2[2] + ka * acc_lpf_data[2];
-//             sensors.accelerometer_m_s2[0] = acc_lpf_data[0];
-//             sensors.accelerometer_m_s2[1] = acc_lpf_data[1];
-//             sensors.accelerometer_m_s2[2] = acc_lpf_data[2];
-//             ka = 0.6f;
-//             gyro_lpf_data[0] = (1 - ka) * sensors.gyro_rad[0] + ka * gyro_lpf_data[0];
-//             ka = 0.6f;
-//             gyro_lpf_data[1] = (1 - ka) * sensors.gyro_rad[1] + ka * gyro_lpf_data[1];
-//             ka = 0.6f;
-//             gyro_lpf_data[2] = (1 - ka) * sensors.gyro_rad[2] + ka * gyro_lpf_data[2];
-//             sensors.gyro_rad[0] = gyro_lpf_data[0];
-//             sensors.gyro_rad[1] = gyro_lpf_data[1];
-//             sensors.gyro_rad[2] = gyro_lpf_data[2];
-//         }
-//           acc_test_data[0] = sensors.accelerometer_m_s2[0];
-//           acc_test_data[1] = sensors.accelerometer_m_s2[1];
-//           acc_test_data[2] = sensors.accelerometer_m_s2[2];
-//           gyro_test_data[0] = sensors.gyro_rad[0];
-//           gyro_test_data[1] = sensors.gyro_rad[1];
-//           gyro_test_data[2] = sensors.gyro_rad[2];
+      //DGX acc&gyro_lpf
 
-        //DGX acc&gyro_lpf 2nd - order
-        //const matrix::Vector3f val_raw_gyro{sensors.accelerometer_m_s2};
-        const matrix::Vector3f val_raw_gyro{sensors.gyro_rad};
-        const matrix::Vector3f val_filted_gyro{_filter_gyro_3rd.apply(val_raw_gyro)};
-        gyro_lpf_data[0] = val_filted_gyro(0);
-        gyro_lpf_data[1] = val_filted_gyro(1);
-        gyro_lpf_data[2] = val_filted_gyro(2);
+             Ga = 5.820863439e+00f;
+             ka = 0.8282041813f;
+             acc_lpf_data[0] = sensors.accelerometer_m_s2[0] /Ga + ka * acc_lpf_data[0];
+             acc_lpf_data[1] = sensors.accelerometer_m_s2[1] /Ga + ka * acc_lpf_data[1];
+             acc_lpf_data[2] = sensors.accelerometer_m_s2[2] /Ga + ka * acc_lpf_data[2];
+             sensors.accelerometer_m_s2[0] = acc_lpf_data[0];
+             sensors.accelerometer_m_s2[1] = acc_lpf_data[1];
+             sensors.accelerometer_m_s2[2] = acc_lpf_data[2];
 
-        //DGX acc&gyro_lpf 3rd - order
-        //const matrix::Vector3f val_raw_acc{sensors.gyro_rad};
-        const matrix::Vector3f val_raw_acc{sensors.accelerometer_m_s2};
-        const matrix::Vector3f val_filted_acc{_filter_acc_3rd.apply(val_raw_acc)};
-        //const matrix::Vector3f val_filted_3rd{_filter_gyro_3rd.apply(val_raw_acc)};
-        acc_lpf_data[0]  = val_filted_acc(0);
-        acc_lpf_data[1]  = val_filted_acc(1);
-        acc_lpf_data[2]  = val_filted_acc(2);
+             gyro_lpf_data[0] = sensors.gyro_rad[0] /Ga + ka * gyro_lpf_data[0];
+             gyro_lpf_data[1] = sensors.gyro_rad[1] /Ga + ka * gyro_lpf_data[1];
+             gyro_lpf_data[2] = sensors.gyro_rad[2] /Ga + ka * gyro_lpf_data[2];
+             sensors.gyro_rad[0] = gyro_lpf_data[0];
+             sensors.gyro_rad[1] = gyro_lpf_data[1];
+             sensors.gyro_rad[2] = gyro_lpf_data[2];
 
-        sensors.gyro_rad[0] = gyro_lpf_data[0];
-        sensors.gyro_rad[1] = gyro_lpf_data[1];
-        sensors.gyro_rad[2] = gyro_lpf_data[2];
-        sensors.accelerometer_m_s2[0] = acc_lpf_data[0];
-        sensors.accelerometer_m_s2[1] = acc_lpf_data[1];
-        sensors.accelerometer_m_s2[2] = acc_lpf_data[2];
+           acc_test_data[0] = sensors.accelerometer_m_s2[0];
+           acc_test_data[1] = sensors.accelerometer_m_s2[1];
+           acc_test_data[2] = sensors.accelerometer_m_s2[2];
+           gyro_test_data[0] = sensors.gyro_rad[0];
+           gyro_test_data[1] = sensors.gyro_rad[1];
+           gyro_test_data[2] = sensors.gyro_rad[2];
+      //
 
         // ekf2_timestamps (using 0.1 ms relative timestamps)
         ekf2_timestamps_s ekf2_timestamps = {};
@@ -975,7 +913,6 @@ void Ekf2::run()
 //                mag_test_data[1] = magnetometer.magnetometer_ga[1];
 //                mag_test_data[2] = magnetometer.magnetometer_ga[2];
 //             //
-
                 if (sensor_selection.mag_device_id != 0 && sensor_selection.mag_device_id != (uint32_t)_param_ekf2_magbias_id.get()) {
                     if (_invalid_mag_id_count < 200) {
                         _invalid_mag_id_count++;
@@ -1046,15 +983,14 @@ void Ekf2::run()
             if (orb_copy(ORB_ID(vehicle_air_data), _airdata_sub, &airdata) == PX4_OK) {
                 // If the time last used by the EKF is less than specified, then accumulate the
                 // data and push the average when the specified interval is reached.
-             //DGX baro_lpf
-                if(_balt_time_ms_last_used == 0){
-                    baro_lpf_data = airdata.baro_alt_meter;
-                } else{
-                    ka = 0.8f;
-                    baro_lpf_data = (1 - ka)*airdata.baro_alt_meter + ka* baro_lpf_data;
-                    airdata.baro_alt_meter= baro_lpf_data;
-                }
-//                    baro_test_data = airdata.baro_alt_meter;
+             //DGX baro_lpf_1
+                ka = 0.9f;
+                baro_lpf_data = (1 - ka)*airdata.baro_alt_meter + ka* baro_lpf_data;
+                airdata.baro_alt_meter= baro_lpf_data;
+                baro_test_data = airdata.baro_alt_meter;
+
+             //DGX baro_lpf_2
+
              //
                 _balt_time_sum_ms += airdata.timestamp / 1000;
                 _balt_sample_count++;
@@ -1994,16 +1930,16 @@ bool Ekf2::publish_attitude(const sensor_combined_s &sensors, const hrt_abstime 
         att.roll_body = atan2f(2*(q0*q1 + q2*q3), 1 -2*(q1*q1 + q2*q2));
         att.pitch_body = asinf(2*(q0*q2 - q3*q1));
         att.yaw_body = atan2f(2*(q0*q3 + q1*q2), 1 - 2*(q2*q2 + q3*q3));
-        att.baro_lpf_data = baro_lpf_data;  //baro_lpf_data;
-        att.mag_lpf_data[0] = mag_lpf_data[0];
-        att.mag_lpf_data[1] = mag_lpf_data[1];
-        att.mag_lpf_data[2] = mag_lpf_data[2];
-        att.acc_lpf_data[0] = acc_lpf_data[0];
-        att.acc_lpf_data[1] = acc_lpf_data[1];
-        att.acc_lpf_data[2] = acc_lpf_data[2];
-        att.gyro_lpf_data[0] = gyro_lpf_data[0];
-        att.gyro_lpf_data[1] = gyro_lpf_data[1];
-        att.gyro_lpf_data[2] = gyro_lpf_data[2];
+        att.baro_lpf_data = baro_test_data;  //baro_lpf_data;
+        att.mag_lpf_data[0] = mag_test_data[0];
+        att.mag_lpf_data[1] = mag_test_data[1];
+        att.mag_lpf_data[2] = mag_test_data[2];
+        att.acc_lpf_data[0] = acc_test_data[0];
+        att.acc_lpf_data[1] = acc_test_data[1];
+        att.acc_lpf_data[2] = acc_test_data[2];
+        att.gyro_lpf_data[0] = gyro_test_data[0];
+        att.gyro_lpf_data[1] = gyro_test_data[1];
+        att.gyro_lpf_data[2] = gyro_test_data[2];
         int instance;
         orb_publish_auto(ORB_ID(vehicle_attitude), &_att_pub, &att, &instance, ORB_PRIO_HIGH);
 

@@ -944,7 +944,7 @@ bool prearm_check(orb_advert_t *mavlink_log_pub, const vehicle_status_flags_s &s
 				mavlink_log_critical(mavlink_log_pub, "ARMING DENIED: CHECK BATTERY");
 			}
 
-            //prearm_ok = false;
+            prearm_ok = false;
 		}
 	}
 
@@ -1030,6 +1030,9 @@ void battery_failsafe(orb_advert_t *mavlink_log_pub, const vehicle_status_s &sta
 
 		switch (low_battery_action) {
 		case LOW_BAT_ACTION::WARNING:
+
+        case LOW_BAT_ACTION::LAND2:
+
 			mavlink_log_critical(mavlink_log_pub, "%s, RETURN ADVISED!", battery_critical);
 			break;
 
@@ -1087,6 +1090,9 @@ void battery_failsafe(orb_advert_t *mavlink_log_pub, const vehicle_status_s &sta
 
 		// FALLTHROUGH
 		case LOW_BAT_ACTION::LAND:
+
+       case LOW_BAT_ACTION::LAND2:
+
 			if (TRANSITION_DENIED != main_state_transition(status, commander_state_s::MAIN_STATE_AUTO_LAND, status_flags,
 					internal_state)) {
 				mavlink_log_emergency(mavlink_log_pub, "%s, LANDING IMMEDIATELY", battery_dangerous);

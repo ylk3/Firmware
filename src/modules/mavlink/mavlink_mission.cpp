@@ -1729,3 +1729,8 @@ void MavlinkMissionManager::check_active_mission()
 				   MAV_MISSION_TYPE_MISSION);
 	}
 }
+
+void MavlinkMissionManager::add_transfer_count()
+{
+    _transfer_count++;
+}

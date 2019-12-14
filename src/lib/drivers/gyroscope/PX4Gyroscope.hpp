@@ -42,6 +42,18 @@
 #include <uORB/uORB.h>
 #include <uORB/Publication.hpp>
 #include <uORB/topics/sensor_gyro.h>
+#include <mathlib/math/filter/LowPassFilter2DG.hpp>
+#include <mathlib/math/filter/LowPassFilter3DG.hpp>
+
+const float a_2nd[2][2] = {{0.7194f, -0.2461f}, {0.2461f, 0.9648f}};
+const float b_2nd[2] = {0.3270f, 0.0468f};
+const float c_2nd[2] = {0.0410f, 0.6224f};
+const float d_2nd = 0.0640f; //ellip 10-30 1dB-25dB
+
+//const float a_3rd[3][3] = {{0.5573f, 0.0f, 0.0f}, {0.5187f,0.5711f,-0.3862f}, {0.1275f, 0.3862f, 0.9051f}};
+//const float b_3rd[3] = {0.9339f, 0.3111f, 0.0765f};
+//const float c_3rd[3] = {0.0906f, -0.0074f, 0.2073f};
+//const float d_3rd = 0.0543f; //cheby2 10-30 1dB-25dB
 
 class PX4Gyroscope : public cdev::CDev, public ModuleParams
 {
@@ -71,6 +83,13 @@ private:
 
 	math::LowPassFilter2pVector3f _filter{1000, 100};
 	Integrator _integrator{4000, true};
+
+//    float a_2nd[2][2] = {{0.7194f, -0.2461f}, {0.2461f, 0.9648f}};
+//    float b_2nd[2] = {0.3270f, 0.0468f};
+//    float c_2nd[2] = {0.0410f, 0.6224f};
+//    float d_2nd = 0.0640f; //cheby2 10-30 1dB-25dB
+    math::LowPassFilter2DG _filter_2d{a_2nd, b_2nd, c_2nd, d_2nd};
+    //math::LowPassFilte3DG _filter_3d{a_3rd, b_3rd, c_3rd, d_3rd};
 
 	const enum Rotation	_rotation;
 

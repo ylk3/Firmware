@@ -2219,6 +2219,10 @@ Mavlink::task_main(int argc, char *argv[])
             else if (dg_manager.dg_mission.msg_type == 2){
                 dg_manager.handle_mission_set_current(&msg_empty);
             }
+//            else if (dg_manager.dg_mission.msg_type == 4){
+//                dg_manager.add_transfer_count();
+//                dg_manager.handle_mission_item(&msg_empty);
+//            }
             dg_manager.dg_mission_enable =false;
         }
 

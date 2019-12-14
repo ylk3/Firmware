@@ -623,6 +623,7 @@ void Logger::add_default_topics()
 	add_topic("camera_capture");
 	add_topic("camera_trigger");
 	add_topic("camera_trigger_secondary");
+    add_topic("commander_state",500);
 	add_topic("cpuload");
     add_topic("dg_attitude", 100);
 	add_topic("distance_sensor", 100);
@@ -687,10 +688,11 @@ void Logger::add_high_rate_topics()
 	add_topic("manual_control_setpoint");
 	add_topic("rate_ctrl_status");
 	add_topic("sensor_combined");
+    //add_topic("sensor_gyro");
 	add_topic("vehicle_attitude");
 	add_topic("vehicle_attitude_setpoint");
 	add_topic("vehicle_rates_setpoint");
-    add_topic("dg_attitude");
+    //add_topic("dg_attitude");
 }
 
 void Logger::add_debug_topics()

@@ -62,4 +62,24 @@
 
 #define EXEX_COMM_HIGHT_CHANGE (uint8_t)1
 
+#define YEAR ((((__DATE__[7]-'0')*10+(__DATE__[8]-'0'))*10 +(__DATE__[9]-'0'))*10+(__DATE__[10]-'0'))
+
+#define MONTH (__DATE__[2]=='n' ? (__DATE__[1]=='a' ? 1 : 6) \
+:__DATE__[2]=='b' ? 2 \
+:__DATE__[2]=='r' ? (__DATE__[0]=='M' ? 3 : 4) \
+:__DATE__[2]=='y' ? 5 \
+:__DATE__[2]=='l' ? 7 \
+:__DATE__[2]=='g' ? 8 \
+:__DATE__[2]=='p' ? 9 \
+:__DATE__[2]=='t' ? 10 \
+:__DATE__[2]=='v' ? 11:12)
+
+#define DAY ((__DATE__[4]==' ' ? 0 : __DATE__[4]-'0')*10 + (__DATE__[5]-'0'))
+
+#define DG_VERSION (uint16_t)(DAY + (MONTH << 5) + ((YEAR - 2017)<<9))
+
+//uint16_t set_version(char *date){
+
+//}
+
 #endif // RW_UART_DEFINE_H

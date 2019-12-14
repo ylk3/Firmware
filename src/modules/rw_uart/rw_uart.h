@@ -129,16 +129,22 @@ typedef struct {
     uint8_t roll_p;
     uint8_t roll_i;
     uint8_t roll_d;
-    uint8_t pitch_p;
-    uint8_t pitch_i;
-    uint8_t pitch_d;
-    uint8_t yaw_p;
-    uint8_t yaw_i;
-    uint8_t yaw_d;
-    uint8_t z_p;
+//    uint8_t pitch_p;
+//    uint8_t pitch_i;
+//    uint8_t pitch_d;
+//    uint8_t yaw_p;
+//    uint8_t yaw_i;
+//    uint8_t yaw_d;
+    uint8_t hor_p;
+    uint8_t hor_i;
+    uint8_t hor_d;
+    uint8_t ver_p;
+    uint8_t ver_i;
+    uint8_t ver_d;
+    uint8_t throttle_p;
     uint8_t yaw_mode; //remain_1
-    uint8_t remain_2;
-    uint8_t remain_3;
+    uint8_t xy_p; //remain_2
+    uint8_t z_p; //remain_3
     uint8_t up_vel_max;
     uint8_t xy_vel_max;
     uint8_t roll_rate;
@@ -147,7 +153,8 @@ typedef struct {
     uint8_t acc_up_max;
     uint8_t remain_4;
     uint8_t yaw_max; //adjust to max yawrate on mannual
-    uint8_t roll_max; //adjust to max tilt on mannual
+    //uint8_t roll_max; //adjust to max tilt on mannual
+    uint8_t att_p;
     uint8_t pitch_max; //adjust to max tilt on auto/posctrl
     uint16_t higt_max;
     uint8_t acc_hor_max;
@@ -305,6 +312,8 @@ typedef struct {
 typedef struct {
    uint16_t total_num;
    uint16_t num;
+   uint8_t speed_pre; //unit: dm
+   uint16_t seq_offset;
    SETD *push;
    //SETD *pop;
    SETD setd[WP_DATA_NUM_MAX];
@@ -334,6 +343,7 @@ typedef struct {
     int vibe_fd;
     int global_position_fd;
     int attitude_sp_fd;
+    int home_position_fd;
 }MSG_orb_sub;
 
 typedef struct {
@@ -363,6 +373,7 @@ typedef struct {
     struct estimator_status_s vibe_data;
     struct vehicle_global_position_s global_position_data;
     struct vehicle_attitude_setpoint_s attitude_sp_data;
+    struct home_position_s home_position_data;
 //    struct follow_target_s follow_target_data;
 }MSG_orb_data;
 
@@ -373,9 +384,17 @@ typedef struct {
     param_t pitch_p_hd;
     param_t pitch_i_hd;
     param_t pitch_d_hd;
-    param_t yaw_p_hd;
-    param_t yaw_i_hd;
-    param_t yaw_d_hd;
+//    param_t yaw_p_hd;
+//    param_t yaw_i_hd;
+//    param_t yaw_d_hd;
+    param_t hor_p_hd;
+    param_t hor_i_hd;
+    param_t hor_d_hd;
+    param_t ver_p_hd;
+    param_t ver_i_hd;
+    param_t ver_d_hd;
+    param_t throttle_hd;
+    param_t xy_p_hd;
     param_t z_p_hd;
     param_t up_vel_max_hd;
     param_t xy_vel_max_hd;
@@ -384,8 +403,11 @@ typedef struct {
     param_t yaw_rate_hd;
     param_t acc_up_max_hd;
     param_t yaw_max_hd;
+    param_t yaw_fast_hd;
     param_t roll_max_hd;
     param_t pitch_max_hd;
+    param_t att_r_hd;
+    param_t att_p_hd;
     param_t higt_max_hd;
     param_t acc_hor_max_hd;
     param_t dist_max_hd;
@@ -393,7 +415,8 @@ typedef struct {
     //param_t calibration_hd; // not set
     param_t mav_type_hd;
     param_t battery_n_cells_hd;
-    param_t battery_warn_hd;
+    //param_t battery_warn_hd;
+    param_t battery_crit_hd;
     //param_t slope_climb_hd; //not set
     //param_t mount_roll_hd; // not set
     //param_t mount_pitch_hd; // not set
@@ -456,5 +479,7 @@ extern void follow_ack_pack_send(uint8_t failed);
 extern void exyf_response_pack(MSG_type msg_type, MSG_param_hd msg_hd);
 
 extern int find_frame(uint8_t data);
+
+extern void wp_data_init(void);
 
 #endif // RW_UART_H

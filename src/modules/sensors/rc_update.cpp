@@ -91,6 +91,7 @@ int RCUpdate::init()
 
     _vs_enable_DG = 0;
     vs_last_timestamp = 0;
+    _vs_last_enable = false;
     memset(&_vs_sp, 0, sizeof(_vs_sp));
 
 	return 0;
@@ -282,19 +283,19 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
     if(vs_updated) {
         orb_copy(ORB_ID(virtual_stick), _vs_sub, &_vs_sp);
         vs_last_timestamp = hrt_absolute_time();
-        if(_vs_sp.rc_signal_lost){
-                        struct manual_control_setpoint_s manual = {};
-                        manual.timestamp = vs_last_timestamp;
-                        manual.data_source = 255;
-                        manual.x = _vs_sp.x;
-                        manual.y = _vs_sp.y;
-                        manual.r = _vs_sp.r;
-                        manual.z = _vs_sp.z;
-                        manual.virtual_stick_enable = true;
-                        int instance;
-                        orb_publish_auto(ORB_ID(manual_control_setpoint), &_manual_control_pub, &manual, &instance,
-                             ORB_PRIO_HIGH);
-        }
+//        if(_vs_sp.rc_signal_lost){
+//                        struct manual_control_setpoint_s manual = {};
+//                        manual.timestamp = vs_last_timestamp;
+//                        manual.data_source = 255;
+//                        manual.x = _vs_sp.x;
+//                        manual.y = _vs_sp.y;
+//                        manual.r = _vs_sp.r;
+//                        manual.z = _vs_sp.z;
+//                        manual.virtual_stick_enable = true;
+//                        int instance;
+//                        orb_publish_auto(ORB_ID(manual_control_setpoint), &_manual_control_pub, &manual, &instance,
+//                             ORB_PRIO_HIGH);
+//        }
     }
 
     if (rc_updated) {
@@ -466,7 +467,10 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
             /* DG virtual stick data for x, y, z, r */
             struct vehicle_status_s vehicle_status;
             orb_copy(ORB_ID(vehicle_status), _status_sub, &vehicle_status);
-            bool vs_status_check = vehicle_status.nav_state >=2 && vehicle_status.nav_state <=5;
+            bool vs_status_check = (vehicle_status.nav_state >=2 &&
+                                              vehicle_status.nav_state <=5) ||
+                                              vehicle_status.nav_state == 17 ||
+                                              vehicle_status.nav_state == 18;
 
             if (manual.mode_slot ==5 && vs_status_check)
             {
@@ -519,10 +523,20 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
             manual.aux6 = get_rc_value(rc_channels_s::RC_CHANNELS_FUNCTION_AUX_6, -1.0, 1.0);
 
             /* filter controls */
-            manual.y = math::constrain(_filter_roll.apply(manual.y), -1.f, 1.f);
-            manual.x = math::constrain(_filter_pitch.apply(manual.x), -1.f, 1.f);
-            manual.r = math::constrain(_filter_yaw.apply(manual.r), -1.f, 1.f);
-            manual.z = math::constrain(_filter_throttle.apply(manual.z), 0.f, 1.f);
+            if (_vs_last_enable == manual.virtual_stick_enable){
+                manual.y = math::constrain(_filter_roll.apply(manual.y), -1.f, 1.f);
+                manual.x = math::constrain(_filter_pitch.apply(manual.x), -1.f, 1.f);
+                manual.r = math::constrain(_filter_yaw.apply(manual.r), -1.f, 1.f);
+                manual.z = math::constrain(_filter_throttle.apply(manual.z), 0.f, 1.f);
+            }
+            else{
+                _filter_roll.reset(manual.y);
+                _filter_pitch.reset(manual.x);
+                _filter_yaw.reset(manual.r);
+                _filter_throttle.reset(manual.z);
+            }
+
+            _vs_last_enable = manual.virtual_stick_enable;
 
 			/* publish manual_control_setpoint topic */
 			orb_publish_auto(ORB_ID(manual_control_setpoint), &_manual_control_pub, &manual, &instance,
