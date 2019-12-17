@@ -157,10 +157,11 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
         stp->sp_yaw =(uint8_t)(stp_data.attitude_sp_data.yaw_sp_move_rate*57.3/paramf* 50.0 + 150.0);
         }
 
-    stp->local_z_sp = -(int16_t)(stp_data.local_position_sp_data.z * 10.0) ;
+    stp->local_z_sp = -(int16_t)((stp_data.local_position_sp_data.z - stp_data.home_position_data.z)* 10.0) ;
 
-    float_t distance = (float_t) sqrtl(stp_data.local_position_data.z * stp_data.local_position_data.z + stp_data.local_position_data.x * stp_data.local_position_data.x
-                             + stp_data.local_position_data.y * stp_data.local_position_data.y);
+    float_t distance = (float_t) sqrtl((stp_data.local_position_data.z- stp_data.home_position_data.z) * (stp_data.local_position_data.z - stp_data.home_position_data.z)
+                                                  + (stp_data.local_position_data.x - stp_data.home_position_data.x)* (stp_data.local_position_data.x - stp_data.home_position_data.x)
+                                                  + (stp_data.local_position_data.y - stp_data.home_position_data.y)* (stp_data.local_position_data.y -  stp_data.home_position_data.y));
     stp->distance_high8 =  (uint8_t)(distance/256.0);
     stp->distance_low8 = (uint8_t)(distance);
     stp->local_vx_high8 = (int8_t)(((int16_t)(stp_data.local_position_data.vx * 100.0) & 0xff00) >> 8);

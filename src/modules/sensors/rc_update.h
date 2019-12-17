@@ -120,6 +120,7 @@ private:
     int     _vs_enable_DG = 0;   /**< virtual stick message by DGXY enable*/
     bool     _vs_last_enable = false;
     uint64_t vs_last_timestamp = 0;
+    bool    _rc_signal_lost_pre = false;
 
 	orb_advert_t	_rc_pub = nullptr;		/**< raw r/c control topic */
 	orb_advert_t	_manual_control_pub = nullptr;	/**< manual control signal topic */

@@ -393,13 +393,13 @@ bool set_nav_state(vehicle_status_s *status, actuator_armed_s *armed, commander_
 		   orb_advert_t *mavlink_log_pub, const link_loss_actions_t data_link_loss_act, const bool mission_finished,
 		   const bool stay_in_failsafe, const vehicle_status_flags_s &status_flags, bool landed,
 		   const link_loss_actions_t rc_loss_act, const int offb_loss_act, const int offb_loss_rc_act,
-		   const int posctl_nav_loss_act)
+           const int posctl_nav_loss_act)
 {
 	navigation_state_t nav_state_old = status->nav_state;
 
 	const bool data_link_loss_act_configured = data_link_loss_act > link_loss_actions_t::DISABLED;
 	const bool rc_loss_act_configured = rc_loss_act > link_loss_actions_t::DISABLED;
-	const bool rc_lost = rc_loss_act_configured && (status->rc_signal_lost);
+    const bool rc_lost = rc_loss_act_configured && status->rc_signal_lost;
 
 	bool is_armed = (status->arming_state == vehicle_status_s::ARMING_STATE_ARMED);
 	bool old_failsafe = status->failsafe;
@@ -790,7 +790,6 @@ bool check_invalid_pos_nav_state(vehicle_status_s *status, bool old_failsafe, or
 			// fallback to a mode that gives the operator stick control
 			if (status->is_rotary_wing && status_flags.condition_local_position_valid) {
 				status->nav_state = vehicle_status_s::NAVIGATION_STATE_POSCTL;
-
 			} else if (status_flags.condition_local_altitude_valid) {
 				status->nav_state = vehicle_status_s::NAVIGATION_STATE_ALTCTL;
 

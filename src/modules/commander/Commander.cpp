@@ -181,6 +181,8 @@ static float _eph_threshold_adj =
         INFINITY;	///< maximum allowable horizontal position uncertainty after adjustment for flight condition
 static bool _skip_pos_accuracy_check = false;
 
+static bool rc_signal_lost_pre = false;
+
 /**
  * The daemon app only briefly exists to start
  * the background job. The stack size assigned in the
@@ -1941,55 +1943,6 @@ Commander::run()
                         warning_action_on = warning_action_on || (geofence_loiter_on || geofence_rtl_on);
                 }
 
-                // revert geofence failsafe transition if sticks are moved and we were previously in a manual mode
-                // but only if not in a low battery handling action
-                if (rc_override != 0 && (_battery_warning < battery_status_s::BATTERY_WARNING_CRITICAL) && (warning_action_on &&
-                                (main_state_before_rtl == commander_state_s::MAIN_STATE_MANUAL ||
-                                 main_state_before_rtl == commander_state_s::MAIN_STATE_ALTCTL ||
-                                 main_state_before_rtl == commander_state_s::MAIN_STATE_POSCTL ||
-                                 main_state_before_rtl == commander_state_s::MAIN_STATE_ACRO ||
-                                 main_state_before_rtl == commander_state_s::MAIN_STATE_RATTITUDE ||
-                                 main_state_before_rtl == commander_state_s::MAIN_STATE_STAB))) {
-
-                        // transition to previous state if sticks are touched
-                        if ((_last_sp_man.timestamp != sp_man.timestamp) &&
-                            (_last_sp_man.mode_slot == sp_man.mode_slot) &&
-                            ((fabsf(sp_man.x - _last_sp_man.x) > min_stick_change) ||
-                             (fabsf(sp_man.y - _last_sp_man.y) > min_stick_change) ||
-                             (fabsf(sp_man.z - _last_sp_man.z) > min_stick_change) ||
-                             (fabsf(sp_man.r - _last_sp_man.r) > min_stick_change))) {
-
-                                // revert to position control in any case
-                                main_state_transition(status, commander_state_s::MAIN_STATE_POSCTL, status_flags, &internal_state);
-                                mavlink_log_critical(&mavlink_log_pub, "Autopilot off! Returning control to pilot");
-                                status_changed =true;
-                        }
-                }
-
-                // abort landing or auto or loiter if sticks are moved significantly
-                // but only if not in a low battery handling action
-                if (rc_override != 0 && (_battery_warning < battery_status_s::BATTERY_WARNING_CRITICAL) &&
-                    (internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_LAND ||
-                     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_MISSION ||
-                     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_RTL ||
-                     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_LOITER)) {
-                        // transition to previous state if sticks are touched
-
-                        if ((_last_sp_man.timestamp != sp_man.timestamp) &&
-                            (_last_sp_man.mode_slot == sp_man.mode_slot) &&
-                            ((fabsf(sp_man.x - _last_sp_man.x) > min_stick_change) ||
-                             (fabsf(sp_man.y - _last_sp_man.y) > min_stick_change) ||
-                             (fabsf(sp_man.z - _last_sp_man.z) > min_stick_change) ||
-                             (fabsf(sp_man.r - _last_sp_man.r) > min_stick_change))) {
-
-                                // revert to position control in any case
-                                main_state_transition(status, commander_state_s::MAIN_STATE_POSCTL, status_flags, &internal_state);
-                                mavlink_log_critical(&mavlink_log_pub, "Autopilot off! Returning control to pilot");
-                                status_changed =true;
-                        }
-                }
-
-
                 /* Check for mission flight termination */
                 if (armed.armed && _mission_result_sub.get().flight_termination &&
                     !status_flags.circuit_breaker_flight_termination_disabled) {
@@ -2009,6 +1962,9 @@ Commander::run()
                 }
 
                 /* RC input check */
+
+                if (status_flags.rc_signal_found_once) rc_signal_lost_pre = status.rc_signal_lost;
+
                 if (!status_flags.rc_input_blocked && sp_man.timestamp != 0 &&
                     (hrt_elapsed_time(&sp_man.timestamp) < (_param_com_rc_loss_t.get() * 1_s))) {
 
@@ -2182,12 +2138,62 @@ Commander::run()
                         /* no else case: do not change lockdown flag in unconfigured case */
 
                 } else {
-            if (!status_flags.rc_input_blocked && !status.rc_signal_lost) {
+                        if (!status_flags.rc_input_blocked && !status.rc_signal_lost) {
                                 mavlink_log_critical(&mavlink_log_pub, "Manual control lost");
                                 status.rc_signal_lost = true;
                                 rc_signal_lost_timestamp = sp_man.timestamp;
                                 set_health_flags(subsystem_info_s::SUBSYSTEM_TYPE_RCRECEIVER, true, true, false, status);
                                 status_changed = true;
+                        }
+                }
+
+                // revert geofence failsafe transition if sticks are moved and we were previously in a manual mode
+                // but only if not in a low battery handling action
+                if (rc_override != 0 && (_battery_warning < battery_status_s::BATTERY_WARNING_CRITICAL) && (warning_action_on &&
+                                (main_state_before_rtl == commander_state_s::MAIN_STATE_MANUAL ||
+                                 main_state_before_rtl == commander_state_s::MAIN_STATE_ALTCTL ||
+                                 main_state_before_rtl == commander_state_s::MAIN_STATE_POSCTL ||
+                                 main_state_before_rtl == commander_state_s::MAIN_STATE_ACRO ||
+                                 main_state_before_rtl == commander_state_s::MAIN_STATE_RATTITUDE ||
+                                 main_state_before_rtl == commander_state_s::MAIN_STATE_STAB))) {
+
+                        // transition to previous state if sticks are touched
+                        if ((_last_sp_man.timestamp != sp_man.timestamp) &&
+                            (_last_sp_man.mode_slot == sp_man.mode_slot) &&
+                            (rc_signal_lost_pre == status.rc_signal_lost) &&
+                            ((fabsf(sp_man.x - _last_sp_man.x) > min_stick_change) ||
+                             (fabsf(sp_man.y - _last_sp_man.y) > min_stick_change) ||
+                             (fabsf(sp_man.z - _last_sp_man.z) > min_stick_change) ||
+                             (fabsf(sp_man.r - _last_sp_man.r) > min_stick_change))) {
+
+                                // revert to position control in any case
+                                main_state_transition(status, commander_state_s::MAIN_STATE_POSCTL, status_flags, &internal_state);
+                                mavlink_log_critical(&mavlink_log_pub, "Autopilot off! Returning control to pilot");
+                                status_changed =true;
+                        }
+                }
+
+                // abort landing or auto or loiter if sticks are moved significantly
+                // but only if not in a low battery handling action
+                if (rc_override != 0 && (_battery_warning < battery_status_s::BATTERY_WARNING_CRITICAL) &&
+                    (internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_LAND ||
+                     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_MISSION ||
+                     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_RTL ||
+                     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_LOITER)) {
+                        // transition to previous state if sticks are touched
+
+                        if ((_last_sp_man.timestamp != sp_man.timestamp) &&
+                            (_last_sp_man.mode_slot == sp_man.mode_slot) &&
+                            (rc_signal_lost_pre == status.rc_signal_lost) &&
+                            ((fabsf(sp_man.x - _last_sp_man.x) > min_stick_change) ||
+                             (fabsf(sp_man.y - _last_sp_man.y) > min_stick_change) ||
+                             (fabsf(sp_man.z - _last_sp_man.z) > min_stick_change) ||
+                             (fabsf(sp_man.r - _last_sp_man.r) > min_stick_change))) {
+
+                                // revert to position control in any case
+                                main_state_transition(status, commander_state_s::MAIN_STATE_POSCTL, status_flags, &internal_state);
+                                mavlink_log_critical(&mavlink_log_pub, "Autopilot off! Returning control to pilot");
+                                status_changed =true;
                         }
                 }
 
@@ -2265,10 +2271,30 @@ Commander::run()
                          * just a tablet. Since the RC will force its mode switch setting on connecting
                          * we can as well just wait in a hold mode which enables tablet control.
                          */
-                        if (status.rc_signal_lost && (internal_state.main_state == commander_state_s::MAIN_STATE_MANUAL)
-                            && status_flags.condition_home_position_valid) {
-
-                                main_state_transition(status, commander_state_s::MAIN_STATE_AUTO_RTL, status_flags, &internal_state);
+                        if (status.rc_signal_lost
+                            //&& (internal_state.main_state == commander_state_s::MAIN_STATE_MANUAL)
+                            && status_flags.condition_home_position_valid) {                                
+                                //main_state_transition(status, commander_state_s::MAIN_STATE_AUTO_RTL, status_flags, &internal_state);
+                                //if (_param_nav_rcl_act.get() >0)
+                                {
+                                    uint8_t rc_failsafe_act_disarm = 0;
+                                   switch (_param_nav_rcl_act.get()) {
+//                                   case 1:
+//                                       rc_failsafe_act_disarm = commander_state_s::MAIN_STATE_AUTO_LOITER;
+//                                       break;
+                                   case 2:
+                                       rc_failsafe_act_disarm = commander_state_s::MAIN_STATE_AUTO_RTL;
+                                       break;
+                                   case 3:
+                                       rc_failsafe_act_disarm = commander_state_s::MAIN_STATE_AUTO_LAND;
+                                       break;
+                                   default:
+                                       rc_failsafe_act_disarm = commander_state_s::MAIN_STATE_AUTO_LOITER;
+                                       break;
+                                   }
+                                    main_state_transition(status, rc_failsafe_act_disarm, status_flags, &internal_state);
+                                    status_changed = true;
+                               }
                         }
                 }
 
@@ -2373,7 +2399,7 @@ Commander::run()
                 was_armed = armed.armed;
 
                 /* now set navigation state according to failsafe and main state */
-                bool nav_state_changed = set_nav_state(&status,
+                 bool  nav_state_changed = set_nav_state(&status,
                                                        &armed,
                                                        &internal_state,
                                                        &mavlink_log_pub,
@@ -2810,12 +2836,30 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
 transition_result_t
 Commander::set_main_state(const vehicle_status_s &status_local, bool *changed)
 {
+    if (rc_signal_lost_pre == status.rc_signal_lost){
         if (safety.override_available && safety.override_enabled) {
                 return set_main_state_override_on(status_local, changed);
 
         } else {
                 return set_main_state_rc(status_local, changed);
         }
+    } else {
+        _last_sp_man = sp_man;
+        uint8_t rc_failsafe_act_regain = 0;
+       switch (_param_nav_rcl_act.get()) {
+            case 2:
+                rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_RTL;
+                break;
+            case 3:
+                rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_LAND;
+                break;
+            default:
+                rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_LOITER;
+                break;
+       }
+        main_state_transition(status, rc_failsafe_act_regain, status_flags, &internal_state);
+        return TRANSITION_CHANGED;
+    }
 }
 
 transition_result_t
@@ -2885,9 +2929,11 @@ Commander::set_main_state_rc(const vehicle_status_s &status_local, bool *changed
 
                 /* no timestamp change or no switch change -> nothing changed */
                 return TRANSITION_NOT_CHANGED;
+
         }
 
         _last_sp_man = sp_man;
+        //mavlink_log_info(&mavlink_log_pub, "should_evaluate_rc_mode_switch is %d", should_evaluate_rc_mode_switch);
 
         // reset the position and velocity validity calculation to give the best change of being able to select
         // the desired mode

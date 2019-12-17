@@ -523,7 +523,8 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
             manual.aux6 = get_rc_value(rc_channels_s::RC_CHANNELS_FUNCTION_AUX_6, -1.0, 1.0);
 
             /* filter controls */
-            if (_vs_last_enable == manual.virtual_stick_enable){
+            if ((_vs_last_enable == manual.virtual_stick_enable) &&
+                (_rc_signal_lost_pre == signal_lost)){
                 manual.y = math::constrain(_filter_roll.apply(manual.y), -1.f, 1.f);
                 manual.x = math::constrain(_filter_pitch.apply(manual.x), -1.f, 1.f);
                 manual.r = math::constrain(_filter_yaw.apply(manual.r), -1.f, 1.f);
@@ -566,6 +567,7 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
 				_last_rc_to_param_map_time = hrt_absolute_time();
 			}
 		}
+        _rc_signal_lost_pre = signal_lost;
 	}
     //if(vs_updated)  vs_last_timestamp = _rc.timestamp;
 }
