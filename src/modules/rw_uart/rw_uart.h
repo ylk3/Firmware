@@ -50,6 +50,8 @@
 #include <uORB/topics/dg_vehicle_status.h>
 #include <uORB/topics/home_position.h>
 #include <uORB/topics/dg_mission.h>
+#include <uORB/topics/subsystem_info.h>
+#include <uORB/topics/dg_voltage.h>
 
 #define WP_DATA_NUM_MAX (uint16_t) 20
 
@@ -120,6 +122,18 @@ typedef struct {
     uint16_t version; //1000
     uint8_t sum_check;
 } STP;
+
+typedef struct
+{
+    char head[4];
+    uint8_t reserve[124];
+    uint8_t IMU_status;
+    uint8_t mag_status;
+    uint8_t GPS_baro_status;
+    uint16_t power_voltage;
+    uint8_t reserve2[6];
+    uint8_t sum_check;
+} DYD;
 
 typedef struct {
     char head[5]; //$YFPA
@@ -307,6 +321,7 @@ typedef struct {
 
 typedef struct {
    STP stp;
+   DYD dyd;
 }MSG_send;
 
 typedef struct {
@@ -344,6 +359,7 @@ typedef struct {
     int global_position_fd;
     int attitude_sp_fd;
     int home_position_fd;
+    int dg_voltage_fd;
 }MSG_orb_sub;
 
 typedef struct {
@@ -374,6 +390,7 @@ typedef struct {
     struct vehicle_global_position_s global_position_data;
     struct vehicle_attitude_setpoint_s attitude_sp_data;
     struct home_position_s home_position_data;
+    struct dg_voltage_s dg_voltage_data;
 //    struct follow_target_s follow_target_data;
 }MSG_orb_data;
 
@@ -450,6 +467,8 @@ extern int uart_read;
 extern int read_to_buff(uint8_t *buffer, int start, int end);
 
 extern void stp_pack (STP *stp, MSG_orb_data stp_data);
+
+extern void dyd_pack(DYD *dyd, MSG_orb_data msg_data);
 
 extern bool check_command_repeat(const uint8_t *buffer, MSG_type msg_type);
 

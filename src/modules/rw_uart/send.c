@@ -171,7 +171,7 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
     stp->local_vy_high8 = (int8_t)(((int16_t)(stp_data.local_position_data.vy * 100.0) & 0xff00) >> 8);
     stp->local_vy_low8 =  (int8_t)((int16_t)(stp_data.local_position_data.vy * 100.0) & 0x00ff);
     stp->receiver_status = (uint8_t)(stp_data.status_data.nav_state > 2 /*NAVIGATION_STATE_POSCTL*/ );
-    stp->photo_num = 0;
+    stp->photo_num = stp_data.home_position_data.valid_alt && stp_data.home_position_data.valid_hpos;  //home available
     stp->acc_right = (int16_t)(-stp_data.local_position_data.ay *100.0);
     stp->acc_back = (int16_t)(-stp_data.local_position_data.ax *100.0);
     stp->acc_down = (int16_t)(-stp_data.local_position_data.az *100.0);
@@ -230,8 +230,10 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
     if (param_saved[18] == 3) stp->skyway_state &= 0xfe;
     else stp->skyway_state |= 0x01;
 
-    stp->warnning = get_warnning(stp_data.geofence_data.geofence_violated, stp_data.battery_data.warning,
-                                                stp_data.status_data.rc_signal_lost);
+//    stp->warnning = get_warnning(stp_data.geofence_data.geofence_violated, stp_data.battery_data.warning,
+//                                                stp_data.status_data.rc_signal_lost);
+       stp->warnning = get_warnning(stp_data.geofence_data.geofence_violated, stp_data.dg_voltage_data.warning,
+                                                   stp_data.status_data.rc_signal_lost);
 
     if (stp_data.arm_data.armed == true){
         stp->flight_time = (uint16_t)(stp->total_time - stp_data.arm_data.armed_time_ms/1000);
@@ -466,4 +468,34 @@ void docap_pack_send (int max_min){
     send_message[7] = calculate_sum_check(send_message, sizeof(DOCAP));
     //send_message[7] = 0xaf;
     write(uart_read, send_message, sizeof(DOCAP));
+}
+
+void dyd_pack(DYD *dyd, MSG_orb_data msg_data){
+    dyd->head[0] = '$';
+    dyd->head[1] = 'D';
+    dyd->head[2] = 'Y';
+    dyd->head[3] = 'D';
+
+    // bit mask for sensor type is :  gyo | acc | mag | abspressure | diffpressure | gps
+    if (!(msg_data.status_data.onboard_control_sensors_present & 0x0001) ||
+        !(msg_data.status_data.onboard_control_sensors_present & 0x0002))
+        {dyd->IMU_status |= 0x01;}
+    if (!(msg_data.status_data.onboard_control_sensors_health & 0x0001) ||
+        !(msg_data.status_data.onboard_control_sensors_health & 0x0002))
+        {dyd->IMU_status |= 0x02;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & 0x0004))
+        {dyd->mag_status |= 0x01;}
+    if (!(msg_data.status_data.onboard_control_sensors_health & 0x0004))
+        {dyd->mag_status |= 0x02;}
+
+    if ((hrt_absolute_time() > 50000000) &&
+         !(msg_data.status_data.onboard_control_sensors_present & 0x0020))
+        {dyd->GPS_baro_status |= 0x01;}
+    if (!(msg_data.status_data.onboard_control_sensors_present & 0x0008))
+        {dyd->GPS_baro_status |= 0x08;}
+
+    dyd->power_voltage = (uint16_t) msg_data.dg_voltage_data.voltage_power_filtered_v *100;
+    printf("dg_voltage is %d\n", dyd->power_voltage);
+
 }

@@ -155,6 +155,7 @@ define cmake-build
 		|| (rm -rf $(BUILD_DIR)); \
 	fi
 	@# run the build for the specified target
+	@rm -rf "$(SRC_DIR)"/build/px4_fmu-v5_default/src/modules/rw_uart
 	@cmake --build $(BUILD_DIR) -- $(PX4_MAKE_ARGS) $(ARGS)
 endef
 
@@ -210,7 +211,7 @@ endef
 
 # use px4_fmu-%_default to replace px4fmu-%_default
 px4fmu-%_default:
-	$(call deprecation_warning, ${@},$(subst px4fmu,px4_fmu,$@))
+	$(call deprecation_warning, ${@},$(subst px4fmu,px4_fmu,$@)
 	$(MAKE) $(subst px4fmu,px4_fmu, $@)
 
 posix_sitl_default:

@@ -101,6 +101,7 @@
 #include <uORB/topics/vtol_vehicle_status.h>
 #include <uORB/topics/vehicle_gps_position.h>
 #include <uORB/topics/virtual_stick.h>
+#include <uORB/topics/dg_voltage.h>
 
 typedef enum VEHICLE_MODE_FLAG {
         VEHICLE_MODE_FLAG_CUSTOM_MODE_ENABLED = 1, /* 0b00000001 Reserved for future use. | */
@@ -570,6 +571,7 @@ Commander::Commander() :
         _auto_disarm_landed.set_hysteresis_time_from(false, 10_s);
         _auto_disarm_killed.set_hysteresis_time_from(false, 5_s);
         _battery_sub = orb_subscribe(ORB_ID(battery_status));
+        _battery_sub_dg = orb_subscribe(ORB_ID(dg_voltage));
 
 
         _telemetry_status_sub = orb_subscribe(ORB_ID(telemetry_status));
@@ -600,6 +602,7 @@ Commander::Commander() :
 Commander::~Commander()
 {
         orb_unsubscribe(_battery_sub);
+        orb_unsubscribe(_battery_sub_dg);
         orb_unsubscribe(_telemetry_status_sub);
 
 
@@ -1529,26 +1532,26 @@ Commander::run()
                 if (updated) {
                         orb_copy(ORB_ID(manual_control_setpoint), sp_man_sub, &sp_man);
 
-            // DG_rc_mag_cali code
-            if (abs(sp_man.mode_slot - mode_slot_pre) >3){
-                if(sp_man.timestamp - timestamp_pre < 500000){
-                    mode_chage_count++;
-                }
-                else
-                    mode_chage_count = 0;
-                timestamp_pre = sp_man.timestamp;
-                //mavlink_log_info(&mavlink_log_pub, "mode_chage_count = %d", mode_chage_count);
-                }
-                if (mode_chage_count >3)
-                {
-                    mode_chage_count = 0;
-                    if(status.arming_state <2) {
-                        do_mag_calibration(&mavlink_log_pub);
-                        mag_cali_done = true;
-                    }
-                }
-                if (sp_man.mode_slot != 3) mode_slot_pre = sp_man.mode_slot;
-            }
+                        // DG_rc_mag_cali code
+                        if (abs(sp_man.mode_slot - mode_slot_pre) >3){
+                            if(sp_man.timestamp - timestamp_pre < 500000){
+                                mode_chage_count++;
+                            }
+                            else
+                                mode_chage_count = 0;
+                            timestamp_pre = sp_man.timestamp;
+                            mavlink_log_info(&mavlink_log_pub, "mode_chage_count = %d", mode_chage_count);
+                        }
+                        if (mode_chage_count >3)
+                        {
+                            mode_chage_count = 0;
+                            if(status.arming_state <2) {
+                              do_mag_calibration(&mavlink_log_pub);
+                              mag_cali_done = true;
+                            }
+                          }
+                        if (sp_man.mode_slot != 3) mode_slot_pre = sp_man.mode_slot;
+                      }
 
                 orb_check(offboard_control_mode_sub, &updated);
 
@@ -1796,7 +1799,7 @@ Commander::run()
                         orb_copy(ORB_ID(cpuload), cpuload_sub, &cpuload);
                 }
 
-        battery_status_check(status_changed);
+                battery_status_check(status_changed);
 
                 /* update subsystem info which arrives from outside of commander*/
                 do {
@@ -1941,6 +1944,56 @@ Commander::run()
                                               || sp_man.return_switch == manual_control_setpoint_s::SWITCH_POS_NONE);
 
                         warning_action_on = warning_action_on || (geofence_loiter_on || geofence_rtl_on);
+                }
+
+                // revert geofence failsafe transition if sticks are moved and we were previously in a manual mode
+                // but only if not in a low battery handling action
+                if (rc_override != 0 && (_battery_warning < battery_status_s::BATTERY_WARNING_CRITICAL) && (warning_action_on &&
+                                (main_state_before_rtl == commander_state_s::MAIN_STATE_MANUAL ||
+                                 main_state_before_rtl == commander_state_s::MAIN_STATE_ALTCTL ||
+                                 main_state_before_rtl == commander_state_s::MAIN_STATE_POSCTL ||
+                                 main_state_before_rtl == commander_state_s::MAIN_STATE_ACRO ||
+                                 main_state_before_rtl == commander_state_s::MAIN_STATE_RATTITUDE ||
+                                 main_state_before_rtl == commander_state_s::MAIN_STATE_STAB))) {
+
+                        // transition to previous state if sticks are touched
+                        if ((_last_sp_man.timestamp != sp_man.timestamp) &&
+                            (_last_sp_man.mode_slot == sp_man.mode_slot) &&
+                            (rc_signal_lost_pre == status.rc_signal_lost) &&
+                            ((fabsf(sp_man.x - _last_sp_man.x) > min_stick_change) ||
+                             (fabsf(sp_man.y - _last_sp_man.y) > min_stick_change) ||
+                             (fabsf(sp_man.z - _last_sp_man.z) > min_stick_change) ||
+                             (fabsf(sp_man.r - _last_sp_man.r) > min_stick_change))) {
+
+                                // revert to position control in any case
+                                main_state_transition(status, commander_state_s::MAIN_STATE_POSCTL, status_flags, &internal_state);
+                                mavlink_log_critical(&mavlink_log_pub, "Autopilot off! Returning control to pilot");
+                                status_changed =true;
+                        }
+                }
+
+                // abort landing or auto or loiter if sticks are moved significantly
+                // but only if not in a low battery handling action
+                if (rc_override != 0 && (_battery_warning < battery_status_s::BATTERY_WARNING_CRITICAL) &&
+                    (internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_LAND ||
+                     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_MISSION ||
+                     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_RTL ||
+                     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_LOITER)) {
+                        // transition to previous state if sticks are touched
+
+                        if ((_last_sp_man.timestamp != sp_man.timestamp) &&
+                            (_last_sp_man.mode_slot == sp_man.mode_slot) &&
+                            (rc_signal_lost_pre == status.rc_signal_lost) &&
+                            ((fabsf(sp_man.x - _last_sp_man.x) > min_stick_change) ||
+                             (fabsf(sp_man.y - _last_sp_man.y) > min_stick_change) ||
+                             (fabsf(sp_man.z - _last_sp_man.z) > min_stick_change) ||
+                             (fabsf(sp_man.r - _last_sp_man.r) > min_stick_change))) {
+
+                                // revert to position control in any case
+                                main_state_transition(status, commander_state_s::MAIN_STATE_POSCTL, status_flags, &internal_state);
+                                mavlink_log_critical(&mavlink_log_pub, "Autopilot off! Returning control to pilot");
+                                status_changed =true;
+                        }
                 }
 
                 /* Check for mission flight termination */
@@ -2147,56 +2200,6 @@ Commander::run()
                         }
                 }
 
-                // revert geofence failsafe transition if sticks are moved and we were previously in a manual mode
-                // but only if not in a low battery handling action
-                if (rc_override != 0 && (_battery_warning < battery_status_s::BATTERY_WARNING_CRITICAL) && (warning_action_on &&
-                                (main_state_before_rtl == commander_state_s::MAIN_STATE_MANUAL ||
-                                 main_state_before_rtl == commander_state_s::MAIN_STATE_ALTCTL ||
-                                 main_state_before_rtl == commander_state_s::MAIN_STATE_POSCTL ||
-                                 main_state_before_rtl == commander_state_s::MAIN_STATE_ACRO ||
-                                 main_state_before_rtl == commander_state_s::MAIN_STATE_RATTITUDE ||
-                                 main_state_before_rtl == commander_state_s::MAIN_STATE_STAB))) {
-
-                        // transition to previous state if sticks are touched
-                        if ((_last_sp_man.timestamp != sp_man.timestamp) &&
-                            (_last_sp_man.mode_slot == sp_man.mode_slot) &&
-                            (rc_signal_lost_pre == status.rc_signal_lost) &&
-                            ((fabsf(sp_man.x - _last_sp_man.x) > min_stick_change) ||
-                             (fabsf(sp_man.y - _last_sp_man.y) > min_stick_change) ||
-                             (fabsf(sp_man.z - _last_sp_man.z) > min_stick_change) ||
-                             (fabsf(sp_man.r - _last_sp_man.r) > min_stick_change))) {
-
-                                // revert to position control in any case
-                                main_state_transition(status, commander_state_s::MAIN_STATE_POSCTL, status_flags, &internal_state);
-                                mavlink_log_critical(&mavlink_log_pub, "Autopilot off! Returning control to pilot");
-                                status_changed =true;
-                        }
-                }
-
-                // abort landing or auto or loiter if sticks are moved significantly
-                // but only if not in a low battery handling action
-                if (rc_override != 0 && (_battery_warning < battery_status_s::BATTERY_WARNING_CRITICAL) &&
-                    (internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_LAND ||
-                     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_MISSION ||
-                     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_RTL ||
-                     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_LOITER)) {
-                        // transition to previous state if sticks are touched
-
-                        if ((_last_sp_man.timestamp != sp_man.timestamp) &&
-                            (_last_sp_man.mode_slot == sp_man.mode_slot) &&
-                            (rc_signal_lost_pre == status.rc_signal_lost) &&
-                            ((fabsf(sp_man.x - _last_sp_man.x) > min_stick_change) ||
-                             (fabsf(sp_man.y - _last_sp_man.y) > min_stick_change) ||
-                             (fabsf(sp_man.z - _last_sp_man.z) > min_stick_change) ||
-                             (fabsf(sp_man.r - _last_sp_man.r) > min_stick_change))) {
-
-                                // revert to position control in any case
-                                main_state_transition(status, commander_state_s::MAIN_STATE_POSCTL, status_flags, &internal_state);
-                                mavlink_log_critical(&mavlink_log_pub, "Autopilot off! Returning control to pilot");
-                                status_changed =true;
-                        }
-                }
-
                 // data link checks which update the status
                 data_link_check(status_changed);
 
@@ -2265,7 +2268,8 @@ Commander::run()
                 }
 
                 /* check if we are disarmed and there is a better mode to wait in */
-                if (!armed.armed) {
+                //if (!armed.armed)
+                {
 
                         /* if there is no radio control but GPS lock the user might want to fly using
                          * just a tablet. Since the RC will force its mode switch setting on connecting
@@ -2293,7 +2297,7 @@ Commander::run()
                                        break;
                                    }
                                     main_state_transition(status, rc_failsafe_act_disarm, status_flags, &internal_state);
-                                    status_changed = true;
+                                    //status_changed = true;
                                }
                         }
                 }
@@ -2697,9 +2701,10 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
 
         if (set_normal_color) {
             /* set color */
-            if (status.failsafe) {
-                led_color = led_control_s::COLOR_PURPLE;
-            } else if (status_local->arming_state == vehicle_status_s::ARMING_STATE_INIT) {
+//            if (status.failsafe) {
+//                led_color = led_control_s::COLOR_PURPLE;
+//            } else
+            if (status_local->arming_state == vehicle_status_s::ARMING_STATE_INIT) {
             // if in init status it should not be in the error state
                 led_mode = led_control_s::MODE_BLINK_FAST;
                 led_color = led_control_s::COLOR_YELLOW;
@@ -2728,7 +2733,7 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
                 led_mode  = led_control_s::MODE_BLINK_FAST;
                 led_color = led_control_s::COLOR_YELLOW;
             } else if(status.nav_state==vehicle_status_s::NAVIGATION_STATE_MANUAL){
-                if (status_flags.condition_global_position_valid && status_flags.condition_local_position_valid ) {
+                if (status_flags.condition_global_position_valid && status_flags.condition_local_position_valid) {
                       led_mode = (led_control_s::MODE_FLASH)|((led_control_s::COLOR_YELLOW)<<4);
                       led_color = led_control_s::COLOR_YELLOW;
                       led_color|= (led_control_s::COLOR_GREEN)<<4;
@@ -2737,7 +2742,10 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
                     led_mode  = led_control_s::MODE_BLINK_NORMAL;
                     led_color = led_control_s::COLOR_YELLOW;
                 }
-            }else if(status.nav_state==vehicle_status_s::NAVIGATION_STATE_ALTCTL || status.nav_state==vehicle_status_s::NAVIGATION_STATE_STAB ){
+            }else if (status.nav_state==vehicle_status_s::NAVIGATION_STATE_ALTCTL ||
+                       status.nav_state==vehicle_status_s::NAVIGATION_STATE_STAB ||
+                       (status.nav_state==vehicle_status_s::NAVIGATION_STATE_POSCTL &&
+                        (!status_flags.condition_global_position_valid || !status_flags.condition_local_position_valid))){
                 led_mode = (led_control_s::MODE_FLASH)|((led_control_s::COLOR_GREEN)<<4);
                 led_color = led_control_s::COLOR_GREEN;
                 led_color|= (led_control_s::COLOR_YELLOW)<<4;
@@ -2750,7 +2758,8 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
                      sp_man.mode_slot ==manual_control_setpoint_s::MODE_SLOT_4){
                 led_mode  = led_control_s::MODE_BLINK_FAST;
                 led_color = led_control_s::COLOR_BLUE;
-            }else if(status.nav_state==vehicle_status_s::vehicle_status_s::NAVIGATION_STATE_AUTO_RTL){
+            }else if(status.nav_state==vehicle_status_s::vehicle_status_s::NAVIGATION_STATE_AUTO_RTL ||
+                       status.nav_state==vehicle_status_s::vehicle_status_s::NAVIGATION_STATE_AUTO_LAND ){
                 led_mode  = led_control_s::MODE_ON;
                 led_color = led_control_s::COLOR_RED;
             /*}else if(status.data_link_lost){
@@ -2759,14 +2768,14 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
                  led_color|= (led_control_s::COLOR_BLUE)<<4;
                  led_color|= 1<<7;*/
             }else{
-                if(status.nav_state==vehicle_status_s::NAVIGATION_STATE_POSCTL && sp_man.virtual_stick_enable){
+                if (status.nav_state==vehicle_status_s::NAVIGATION_STATE_POSCTL && sp_man.virtual_stick_enable){
                     led_mode = led_control_s::MODE_BLINK_NORMAL;
                     led_color = led_control_s::COLOR_BLUE;
                     led_color|= (led_control_s::COLOR_GREEN)<<4;
                     led_color|= 1<<7;
-            }else{
-                  led_mode  = led_control_s::MODE_BLINK_NORMAL;
-                  led_color = led_control_s::COLOR_GREEN;
+                }else{
+                   led_mode  = led_control_s::MODE_BLINK_NORMAL;
+                   led_color = led_control_s::COLOR_GREEN;
                 }
             }
 
@@ -2836,30 +2845,53 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
 transition_result_t
 Commander::set_main_state(const vehicle_status_s &status_local, bool *changed)
 {
-    if (rc_signal_lost_pre == status.rc_signal_lost){
+    //if (rc_signal_lost_pre == status.rc_signal_lost)
+    if (rc_signal_lost_pre == true && status.rc_signal_lost == false){
+            _last_sp_man = sp_man;
+            uint8_t rc_failsafe_act_regain = 0;
+            switch (_param_nav_rcl_act.get()) {
+                case 2:
+                    rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_RTL;
+                    break;
+                case 3:
+                    rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_LAND;
+                    break;
+                default:
+                    rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_LOITER;
+                    break;
+            }
+            main_state_transition(status, rc_failsafe_act_regain, status_flags, &internal_state);
+            *changed = true;
+            return TRANSITION_CHANGED;
+        }
+    else {
         if (safety.override_available && safety.override_enabled) {
                 return set_main_state_override_on(status_local, changed);
 
         } else {
                 return set_main_state_rc(status_local, changed);
         }
-    } else {
-        _last_sp_man = sp_man;
-        uint8_t rc_failsafe_act_regain = 0;
-       switch (_param_nav_rcl_act.get()) {
-            case 2:
-                rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_RTL;
-                break;
-            case 3:
-                rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_LAND;
-                break;
-            default:
-                rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_LOITER;
-                break;
-       }
-        main_state_transition(status, rc_failsafe_act_regain, status_flags, &internal_state);
-        return TRANSITION_CHANGED;
     }
+//    else {
+//        _last_sp_man = sp_man;
+//        if (rc_signal_lost_pre == true && status.rc_signal_lost == false){
+//            _last_sp_man = sp_man;
+//            uint8_t rc_failsafe_act_regain = 0;
+//            switch (_param_nav_rcl_act.get()) {
+//                case 2:
+//                    rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_RTL;
+//                    break;
+//                case 3:
+//                    rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_LAND;
+//                    break;
+//                default:
+//                    rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_LOITER;
+//                    break;
+//            }
+//        main_state_transition(status, rc_failsafe_act_regain, status_flags, &internal_state);
+//        }
+//        return TRANSITION_CHANGED;
+//    }
 }
 
 transition_result_t
@@ -3378,6 +3410,7 @@ set_control_mode()
 
         switch (status.nav_state) {
         case vehicle_status_s::NAVIGATION_STATE_MANUAL:
+        case vehicle_status_s::NAVIGATION_STATE_STAB:
                 control_mode.flag_control_manual_enabled = true;
                 control_mode.flag_control_auto_enabled = false;
                 control_mode.flag_control_rates_enabled = stabilization_required();
@@ -3389,21 +3422,22 @@ set_control_mode()
                 control_mode.flag_control_velocity_enabled = false;
                 control_mode.flag_control_acceleration_enabled = false;
                 control_mode.flag_control_termination_enabled = false;
+                status.nav_state = vehicle_status_s::NAVIGATION_STATE_MANUAL;
                 break;
 
-        case vehicle_status_s::NAVIGATION_STATE_STAB:
-                control_mode.flag_control_manual_enabled = true;
-                control_mode.flag_control_auto_enabled = false;
-                control_mode.flag_control_rates_enabled = true;
-                control_mode.flag_control_attitude_enabled = true;
-                control_mode.flag_control_rattitude_enabled = false;
-                control_mode.flag_control_altitude_enabled = false;
-                control_mode.flag_control_climb_rate_enabled = false;
-                control_mode.flag_control_position_enabled = false;
-                control_mode.flag_control_velocity_enabled = false;
-                control_mode.flag_control_acceleration_enabled = false;
-                control_mode.flag_control_termination_enabled = false;
-                break;
+//        case vehicle_status_s::NAVIGATION_STATE_STAB:
+//                control_mode.flag_control_manual_enabled = true;
+//                control_mode.flag_control_auto_enabled = false;
+//                control_mode.flag_control_rates_enabled = true;
+//                control_mode.flag_control_attitude_enabled = true;
+//                control_mode.flag_control_rattitude_enabled = false;
+//                control_mode.flag_control_altitude_enabled = false;
+//                control_mode.flag_control_climb_rate_enabled = false;
+//                control_mode.flag_control_position_enabled = false;
+//                control_mode.flag_control_velocity_enabled = false;
+//                control_mode.flag_control_acceleration_enabled = false;
+//                control_mode.flag_control_termination_enabled = false;
+//                break;
 
 //	case vehicle_status_s::NAVIGATION_STATE_RATTITUDE:
 //		control_mode.flag_control_manual_enabled = true;
@@ -4226,16 +4260,15 @@ void Commander::battery_status_check(bool &status_changed)
     bool updated = false;
 
     /* update battery status */
-    orb_check(_battery_sub, &updated);
+    orb_check(_battery_sub_dg, &updated);
 
     if (updated) {
 
-        battery_status_s battery = {};
+        dg_voltage_s battery = {};
 
-        if (orb_copy(ORB_ID(battery_status), _battery_sub, &battery) == PX4_OK) {
+        if (orb_copy(ORB_ID(dg_voltage), _battery_sub_dg, &battery) == PX4_OK) {
 
             if ((hrt_elapsed_time(&battery.timestamp) < 5_s)
-                && battery.connected
                 && (_battery_warning == battery_status_s::BATTERY_WARNING_NONE)) {
 
                 status_flags.condition_battery_healthy = true;
@@ -4278,9 +4311,64 @@ void Commander::battery_status_check(bool &status_changed)
             if(_battery_warning != battery.warning)
                 status_changed=true;
             _battery_warning = battery.warning;
-            _battery_current = battery.current_filtered_a;
+            _battery_current = 5.0f;
         }
     }
+
+//    if (updated) {
+
+//        battery_status_s battery = {};
+
+//        if (orb_copy(ORB_ID(battery_status), _battery_sub, &battery) == PX4_OK) {
+
+//            if ((hrt_elapsed_time(&battery.timestamp) < 5_s)
+//                && battery.connected
+//                && (_battery_warning == battery_status_s::BATTERY_WARNING_NONE)) {
+
+//                status_flags.condition_battery_healthy = true;
+
+//            } else {
+//                status_flags.condition_battery_healthy = false;
+//            }
+
+//            // execute battery failsafe if the state has gotten worse
+//            if (armed.armed) {
+//                if (battery.warning > _battery_warning)
+//                //if (battery.warning > 0)
+//                {
+//                    battery_failsafe(&mavlink_log_pub, status, status_flags, &internal_state, battery.warning,
+//                             (low_battery_action_t)_param_com_low_bat_act.get());
+//                }
+//            }
+
+//            // Handle shutdown request from emergency battery action
+//            if (!armed.armed && (battery.warning != _battery_warning))
+//            //if (!armed.armed && (battery.warning != 0))
+//            {
+
+//                if (battery.warning == battery_status_s::BATTERY_WARNING_EMERGENCY) {
+//                    mavlink_log_critical(&mavlink_log_pub, "Dangerously low battery! Shutting system down");
+//                    px4_usleep(200000);
+
+//                    int ret_val = px4_shutdown_request(false, false);
+
+//                    if (ret_val) {
+//                        mavlink_log_critical(&mavlink_log_pub, "System does not support shutdown");
+
+//                    } else {
+//                        while (1) { px4_usleep(1); }
+//                    }
+//                }
+//            }
+
+//            // save last value
+//            if(_battery_warning != battery.warning)
+//                status_changed=true;
+//            _battery_warning = battery.warning;
+//            _battery_current = battery.current_filtered_a;
+//        }
+//    }
+
 }
 
 void Commander::airspeed_use_check()

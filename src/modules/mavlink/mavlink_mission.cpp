@@ -659,7 +659,7 @@ MavlinkMissionManager::handle_mission_ack(const mavlink_message_t *msg)
 void
 MavlinkMissionManager::handle_mission_set_current(const mavlink_message_t *msg)
 {
-    //_mavlink->send_statustext_info("Enter handle_mission_set_current function");
+    _mavlink->send_statustext_info("Enter handle_mission_set_current function");
 
     mavlink_mission_set_current_t wpc;
 

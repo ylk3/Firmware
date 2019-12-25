@@ -625,7 +625,7 @@ void Logger::add_default_topics()
 	add_topic("camera_trigger_secondary");
     add_topic("commander_state",500);
 	add_topic("cpuload");
-    add_topic("dg_attitude", 100);
+    //add_topic("dg_attitude", 100);
 	add_topic("distance_sensor", 100);
 	add_topic("ekf2_innovations", 200);
 	//add_topic("ekf_gps_drift");
@@ -660,7 +660,7 @@ void Logger::add_default_topics()
 	add_topic("vehicle_rates_setpoint", 30);
 	add_topic("vehicle_status", 200);
 	add_topic("vehicle_status_flags");
-    add_topic("virtual_stick", 200); //200
+    //add_topic("virtual_stick", 200); //200
 	add_topic("vtol_vehicle_status", 200);
 	add_topic("wind_estimate", 200);
 

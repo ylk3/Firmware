@@ -7,7 +7,7 @@ static double lon_save =0;
 
 void msg_pack_send( MSG_orb_data msg_data, MSG_orb_pub *msg_pd)
 {
-    uint8_t send_message[99];
+    uint8_t send_message[140];
     memset(send_message, 0, sizeof(send_message));
     MSG_send msg_send;
     memset(&msg_send, 0, sizeof(msg_send));
@@ -15,6 +15,15 @@ void msg_pack_send( MSG_orb_data msg_data, MSG_orb_pub *msg_pd)
     memcpy(send_message, &msg_send.stp, sizeof(STP));
     send_message[98] = calculate_sum_check(send_message, sizeof(STP));
     write(uart_read, send_message, sizeof(STP));
+
+    usleep(1000);
+
+    memset(send_message, 0, sizeof(send_message));
+    dyd_pack(&msg_send.dyd, msg_data);
+    memcpy(send_message, &msg_send.dyd, sizeof(DYD));
+    send_message[139] = calculate_sum_check(send_message, sizeof(DYD));
+    write(uart_read, send_message, sizeof(DYD));
+
     struct dg_vehicle_status_s dg_status = {};
     memcpy(&dg_status.stp, send_message, sizeof(STP));
     dg_status.timestamp = hrt_absolute_time();
@@ -261,12 +270,18 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
             printf("Passing land\n");
             break;
         case WIFI_COMM_AUTO_TAKEOFF:
-            set_command_param(&msg_data->command_data, 22, 0, 0, 0, NAN,
-                              (msg_data->global_position_data.lat),
-                              (msg_data->global_position_data.lon),
-                              (msg_data->home_position_data.alt + 5.0));
-            publish_commander_pd(msg_pd, msg_data);
-            printf("Passing takeoff\n");
+            if (msg_data->home_position_data.valid_alt && msg_data->home_position_data.valid_hpos){
+                set_command_param(&msg_data->command_data, 400,
+                                                1, 0, 0, 0, 0, 0, 0);//VEHICLE_CMD_COMPONENT_ARM_DISARM
+                publish_commander_pd(msg_pd, msg_data);
+                usleep(1000000);
+                set_command_param(&msg_data->command_data, 22, 0, 0, 0, NAN,
+                                  (msg_data->global_position_data.lat),
+                                  (msg_data->global_position_data.lon),
+                                  (msg_data->home_position_data.alt + 5.0));
+                publish_commander_pd(msg_pd, msg_data);
+                printf("Passing takeoff\n");
+            }
             break;
         case WIFI_COMM_WP_UPLOAD:
             printf("Start upload\n");
