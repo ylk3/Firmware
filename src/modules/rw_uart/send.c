@@ -476,26 +476,61 @@ void dyd_pack(DYD *dyd, MSG_orb_data msg_data){
     dyd->head[2] = 'Y';
     dyd->head[3] = 'D';
 
-    // bit mask for sensor type is :  gyo | acc | mag | abspressure | diffpressure | gps
-    if (!(msg_data.status_data.onboard_control_sensors_present & 0x0001) ||
-        !(msg_data.status_data.onboard_control_sensors_present & 0x0002))
-        {dyd->IMU_status |= 0x01;}
-    if (!(msg_data.status_data.onboard_control_sensors_health & 0x0001) ||
-        !(msg_data.status_data.onboard_control_sensors_health & 0x0002))
-        {dyd->IMU_status |= 0x02;}
+    // bit mask for sensor type is :  gyo 0 17 28| acc1 1 18 29| mag1 2 19 30| baro1 3 34 35| gps 31 32 33
+    uint64_t bit_mask =1;
 
-    if (!(msg_data.status_data.onboard_control_sensors_present & 0x0004))
-        {dyd->mag_status |= 0x01;}
-    if (!(msg_data.status_data.onboard_control_sensors_health & 0x0004))
-        {dyd->mag_status |= 0x02;}
+    if (!(msg_data.status_data.onboard_control_sensors_present & bit_mask) ||
+        !(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<1)))
+        {dyd->IMU_status |= 0x80;}
+    else if (!(msg_data.status_data.onboard_control_sensors_health & bit_mask) ||
+        !(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<1)))
+        {dyd->IMU_status |= 0x40;}
 
-    if ((hrt_absolute_time() > 50000000) &&
-         !(msg_data.status_data.onboard_control_sensors_present & 0x0020))
-        {dyd->GPS_baro_status |= 0x01;}
-    if (!(msg_data.status_data.onboard_control_sensors_present & 0x0008))
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<17)) ||
+        !(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<18)))
+        {dyd->IMU_status |= 0x20;}
+    else if (!(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<17)) ||
+        !(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<18)))
+        {dyd->IMU_status |= 0x10;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<28)) ||
+        !(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<29)))
+        {dyd->IMU_status |= 0x08;}
+    else if (!(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<28)) ||
+        !(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<29)))
+        {dyd->IMU_status |= 0x04;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<2)))
+        {dyd->mag_status |= 0x80;}
+    else if (!(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<2)))
+        {dyd->mag_status |= 0x40;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<19)))
+        {dyd->mag_status |= 0x20;}
+    else if (!(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<19)))
+        {dyd->mag_status |= 0x10;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<30)))
+        {dyd->mag_status |= 0x08;}
+    else if (!(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<30)))
+        {dyd->mag_status |= 0x04;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<31)))
+        {dyd->GPS_baro_status |= 0x80;}
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<32)))
+        {dyd->GPS_baro_status |= 0x40;}
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<33)))
+        {dyd->GPS_baro_status |= 0x20;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<3)))
+        {dyd->GPS_baro_status |= 0x10;}
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<34)))
         {dyd->GPS_baro_status |= 0x08;}
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<35)))
+        {dyd->GPS_baro_status |= 0x04;}
 
-    dyd->power_voltage = (uint16_t) msg_data.dg_voltage_data.voltage_power_filtered_v *100;
+    dyd->power_voltage = (uint16_t) (msg_data.dg_voltage_data.voltage_battery_filtered_v *100);
     printf("dg_voltage is %d\n", dyd->power_voltage);
+    printf("dg_mag is %d\n", dyd->mag_status);
 
 }

@@ -142,7 +142,9 @@ static bool magnometerCheck(orb_advert_t *mavlink_log_pub, vehicle_status_s &sta
 
 	} else if (instance == 1) {
 		set_health_flags(subsystem_info_s::SUBSYSTEM_TYPE_MAG2, exists, !optional, success, status);
-	}
+    } else if (instance == 2) {
+        set_health_flags(subsystem_info_s::SUBSYSTEM_TYPE_MAG3, exists, !optional, success, status);
+    }
 
 	return success;
 }
@@ -169,6 +171,7 @@ static bool imuConsistencyCheck(orb_advert_t *mavlink_log_pub, vehicle_status_s 
 			mavlink_log_critical(mavlink_log_pub, "Preflight Fail: Accels inconsistent - Check Cal");
 			set_health_flags_healthy(subsystem_info_s::SUBSYSTEM_TYPE_ACC, false, status);
 			set_health_flags_healthy(subsystem_info_s::SUBSYSTEM_TYPE_ACC2, false, status);
+            set_health_flags_healthy(subsystem_info_s::SUBSYSTEM_TYPE_ACC3, false, status);
 		}
 
 		success = false;
@@ -188,6 +191,7 @@ static bool imuConsistencyCheck(orb_advert_t *mavlink_log_pub, vehicle_status_s 
 			mavlink_log_critical(mavlink_log_pub, "Preflight Fail: Gyros inconsistent - Check Cal");
 			set_health_flags_healthy(subsystem_info_s::SUBSYSTEM_TYPE_GYRO, false, status);
 			set_health_flags_healthy(subsystem_info_s::SUBSYSTEM_TYPE_GYRO2, false, status);
+            set_health_flags_healthy(subsystem_info_s::SUBSYSTEM_TYPE_GYRO3, false, status);
 		}
 
 		success = false;
@@ -228,6 +232,7 @@ static bool magConsistencyCheck(orb_advert_t *mavlink_log_pub, vehicle_status_s 
 			mavlink_log_critical(mavlink_log_pub, "Preflight Fail: Compass Sensors inconsistent");
 			set_health_flags_healthy(subsystem_info_s::SUBSYSTEM_TYPE_MAG, false, status);
 			set_health_flags_healthy(subsystem_info_s::SUBSYSTEM_TYPE_MAG2, false, status);
+            set_health_flags_healthy(subsystem_info_s::SUBSYSTEM_TYPE_MAG3, false, status);
 		}
 
 		return false;
@@ -296,6 +301,9 @@ static bool accelerometerCheck(orb_advert_t *mavlink_log_pub, vehicle_status_s &
 	} else if (instance == 1) {
 		set_health_flags(subsystem_info_s::SUBSYSTEM_TYPE_ACC2, exists, !optional, success, status);
 	}
+    else if (instance == 2) {
+            set_health_flags(subsystem_info_s::SUBSYSTEM_TYPE_ACC3, exists, !optional, success, status);
+    }
 
 	return success;
 }
@@ -341,6 +349,9 @@ static bool gyroCheck(orb_advert_t *mavlink_log_pub, vehicle_status_s &status, u
 	} else if (instance == 1) {
 		set_health_flags(subsystem_info_s::SUBSYSTEM_TYPE_GYRO2, exists, !optional, calibration_valid && gyro_valid, status);
 	}
+    else if (instance == 2) {
+            set_health_flags(subsystem_info_s::SUBSYSTEM_TYPE_GYRO3, exists, !optional, calibration_valid && gyro_valid, status);
+    }
 
 	return calibration_valid && gyro_valid;
 }
@@ -361,7 +372,7 @@ static bool baroCheck(orb_advert_t *mavlink_log_pub, vehicle_status_s &status, u
 				mavlink_log_critical(mavlink_log_pub, "Preflight Fail: no valid data from Baro #%u", instance);
 			}
 		}
-
+        device_id = baro.get().device_id;
 
 	} else {
 		if (!optional && report_fail) {
@@ -371,7 +382,12 @@ static bool baroCheck(orb_advert_t *mavlink_log_pub, vehicle_status_s &status, u
 
 	if (instance == 0) {
 		set_health_flags(subsystem_info_s::SUBSYSTEM_TYPE_ABSPRESSURE, exists, !optional, baro_valid, status);
-	}
+    } else if (instance == 1) {
+        set_health_flags(subsystem_info_s::SUBSYSTEM_TYPE_BARO2, exists, !optional, baro_valid, status);
+    }
+    else if (instance == 2) {
+            set_health_flags(subsystem_info_s::SUBSYSTEM_TYPE_BARO3, exists, !optional, baro_valid, status);
+    }
 
 	return baro_valid;
 }

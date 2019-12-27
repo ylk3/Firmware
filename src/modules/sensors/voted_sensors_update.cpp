@@ -929,7 +929,7 @@ bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_n
 						 sensor.priority[i]);
 				}
 
-				if (ctr_valid < 2) {
+                if (ctr_valid < 3) {
 					if (ctr_valid == 0) {
 						// Zero valid sensors remain! Set even the primary sensor health to false
 						_info.subsystem_type = type;
@@ -941,7 +941,14 @@ bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_n
 						if (type == subsystem_info_s::SUBSYSTEM_TYPE_ACC) { _info.subsystem_type = subsystem_info_s::SUBSYSTEM_TYPE_ACC2; }
 
 						if (type == subsystem_info_s::SUBSYSTEM_TYPE_MAG) { _info.subsystem_type = subsystem_info_s::SUBSYSTEM_TYPE_MAG2; }
-					}
+                    } else if (ctr_valid == 2) {
+                        // Set third sensor health to false
+                        if (type == subsystem_info_s::SUBSYSTEM_TYPE_GYRO) { _info.subsystem_type = subsystem_info_s::SUBSYSTEM_TYPE_GYRO3; }
+
+                        if (type == subsystem_info_s::SUBSYSTEM_TYPE_ACC) { _info.subsystem_type = subsystem_info_s::SUBSYSTEM_TYPE_ACC3; }
+
+                        if (type == subsystem_info_s::SUBSYSTEM_TYPE_MAG) { _info.subsystem_type = subsystem_info_s::SUBSYSTEM_TYPE_MAG3; }
+                    }
 
 					_info.timestamp = hrt_absolute_time();
 					_info.present = true;

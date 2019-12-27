@@ -2616,7 +2616,24 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
 
     uint instance = 0;
     uORB::Subscription<vehicle_gps_position_s> gps{ORB_ID(vehicle_gps_position), 0, instance};
-    bool gps_valid = hrt_absolute_time()< 50_s || (hrt_elapsed_time(&gps.get().timestamp) < 5_s);
+    instance =1;
+    uORB::Subscription<vehicle_gps_position_s> gps2{ORB_ID(vehicle_gps_position), 0, instance};
+
+    bool gps1_valid = (hrt_elapsed_time(&gps.get().timestamp) < 5_s);
+    if (!gps1_valid){
+        set_health_flags_present_healthy(subsystem_info_s::SUBSYSTEM_TYPE_GPS1, false, false, status);
+    }else {
+        set_health_flags_present_healthy(subsystem_info_s::SUBSYSTEM_TYPE_GPS1, true, true, status);
+    }
+    bool gps2_valid = (hrt_elapsed_time(&gps2.get().timestamp) < 5_s);
+    if (!gps2_valid){
+        set_health_flags_present_healthy(subsystem_info_s::SUBSYSTEM_TYPE_GPS2, false, false, status);
+    } else {
+        set_health_flags_present_healthy(subsystem_info_s::SUBSYSTEM_TYPE_GPS2, true, true, status);
+    }
+
+    bool gps_valid = hrt_absolute_time()< 50_s || gps1_valid || gps2_valid;
+
     if (gps_valid != pre_gps_valid) {
         changed = true;
         pre_gps_valid = gps_valid;
