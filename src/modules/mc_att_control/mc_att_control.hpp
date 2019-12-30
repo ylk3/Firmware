@@ -62,6 +62,7 @@
 #include <uORB/topics/dg_attitude.h>
 
 #include <AttitudeControl.hpp>
+#include <RateControl.hpp>
 
 /**
  * Multicopter attitude control app start / stop handling function
@@ -151,6 +152,7 @@ private:
 	matrix::Vector3f pid_attenuations(float tpa_breakpoint, float tpa_rate);
 
 	AttitudeControl _attitude_control; /**< class for attitude control calculations */
+    RateControl _rate_control;
 
 	int		_v_att_sub{-1};			/**< vehicle attitude subscription */
 	int		_v_att_sp_sub{-1};		/**< vehicle attitude setpoint subscription */
@@ -200,14 +202,14 @@ private:
 
 	perf_counter_t	_loop_perf;			/**< loop performance counter */
 
-	math::LowPassFilter2pVector3f _lp_filters_d{initial_update_rate_hz, 50.f};	/**< low-pass filters for D-term (roll, pitch & yaw) */
+    //math::LowPassFilter2pVector3f _lp_filters_d{initial_update_rate_hz, 50.f};	/**< low-pass filters for D-term (roll, pitch & yaw) */
 	static constexpr const float initial_update_rate_hz = 250.f; /**< loop update rate used for initialization */
 	float _loop_update_rate_hz{initial_update_rate_hz};          /**< current rate-controller loop update rate in [Hz] */
 
 	matrix::Vector3f _rates_prev;			/**< angular rates on previous step */
 	matrix::Vector3f _rates_prev_filtered;		/**< angular rates on previous step (low-pass filtered) */
 	matrix::Vector3f _rates_sp;			/**< angular rates setpoint */
-	matrix::Vector3f _rates_int;			/**< angular rates integral error */
+    //matrix::Vector3f _rates_int;			/**< angular rates integral error */
 
 	matrix::Vector3f _att_control;			/**< attitude control vector */
 	float		_thrust_sp{0.0f};		/**< thrust setpoint */
@@ -224,6 +226,7 @@ private:
 		(ParamFloat<px4::params::MC_RR_INT_LIM>) _param_mc_rr_int_lim,
 		(ParamFloat<px4::params::MC_ROLLRATE_D>) _param_mc_rollrate_d,
 		(ParamFloat<px4::params::MC_ROLLRATE_FF>) _param_mc_rollrate_ff,
+        (ParamFloat<px4::params::MC_ROLLRATE_K>) _param_mc_rollrate_k,
 
 		(ParamFloat<px4::params::MC_PITCH_P>) _param_mc_pitch_p,
 		(ParamFloat<px4::params::MC_PITCHRATE_P>) _param_mc_pitchrate_p,
@@ -231,6 +234,7 @@ private:
 		(ParamFloat<px4::params::MC_PR_INT_LIM>) _param_mc_pr_int_lim,
 		(ParamFloat<px4::params::MC_PITCHRATE_D>) _param_mc_pitchrate_d,
 		(ParamFloat<px4::params::MC_PITCHRATE_FF>) _param_mc_pitchrate_ff,
+        (ParamFloat<px4::params::MC_PITCHRATE_K>) _param_mc_pitchrate_k,
 
 		(ParamFloat<px4::params::MC_YAW_P>) _param_mc_yaw_p,
 		(ParamFloat<px4::params::MC_YAWRATE_P>) _param_mc_yawrate_p,
@@ -238,15 +242,16 @@ private:
 		(ParamFloat<px4::params::MC_YR_INT_LIM>) _param_mc_yr_int_lim,
 		(ParamFloat<px4::params::MC_YAWRATE_D>) _param_mc_yawrate_d,
 		(ParamFloat<px4::params::MC_YAWRATE_FF>) _param_mc_yawrate_ff,
+        (ParamFloat<px4::params::MC_YAWRATE_K>) _param_mc_yawrate_k,
 
 		(ParamFloat<px4::params::MC_DTERM_CUTOFF>) _param_mc_dterm_cutoff,			/**< Cutoff frequency for the D-term filter */
 
-		(ParamFloat<px4::params::MC_TPA_BREAK_P>) _param_mc_tpa_break_p,			/**< Throttle PID Attenuation breakpoint */
-		(ParamFloat<px4::params::MC_TPA_BREAK_I>) _param_mc_tpa_break_i,			/**< Throttle PID Attenuation breakpoint */
-		(ParamFloat<px4::params::MC_TPA_BREAK_D>) _param_mc_tpa_break_d,			/**< Throttle PID Attenuation breakpoint */
-		(ParamFloat<px4::params::MC_TPA_RATE_P>) _param_mc_tpa_rate_p,				/**< Throttle PID Attenuation slope */
-		(ParamFloat<px4::params::MC_TPA_RATE_I>) _param_mc_tpa_rate_i,				/**< Throttle PID Attenuation slope */
-		(ParamFloat<px4::params::MC_TPA_RATE_D>) _param_mc_tpa_rate_d,				/**< Throttle PID Attenuation slope */
+//		(ParamFloat<px4::params::MC_TPA_BREAK_P>) _param_mc_tpa_break_p,			/**< Throttle PID Attenuation breakpoint */
+//		(ParamFloat<px4::params::MC_TPA_BREAK_I>) _param_mc_tpa_break_i,			/**< Throttle PID Attenuation breakpoint */
+//		(ParamFloat<px4::params::MC_TPA_BREAK_D>) _param_mc_tpa_break_d,			/**< Throttle PID Attenuation breakpoint */
+//		(ParamFloat<px4::params::MC_TPA_RATE_P>) _param_mc_tpa_rate_p,				/**< Throttle PID Attenuation slope */
+//		(ParamFloat<px4::params::MC_TPA_RATE_I>) _param_mc_tpa_rate_i,				/**< Throttle PID Attenuation slope */
+//		(ParamFloat<px4::params::MC_TPA_RATE_D>) _param_mc_tpa_rate_d,				/**< Throttle PID Attenuation slope */
 
 		(ParamFloat<px4::params::MC_ROLLRATE_MAX>) _param_mc_rollrate_max,
 		(ParamFloat<px4::params::MC_PITCHRATE_MAX>) _param_mc_pitchrate_max,
@@ -284,11 +289,11 @@ private:
 
 	bool _is_tailsitter{false};
 
-	matrix::Vector3f _rate_p;		/**< P gain for angular rate error */
-	matrix::Vector3f _rate_i;		/**< I gain for angular rate error */
-	matrix::Vector3f _rate_int_lim;		/**< integrator state limit for rate loop */
-	matrix::Vector3f _rate_d;		/**< D gain for angular rate error */
-	matrix::Vector3f _rate_ff;		/**< Feedforward gain for desired rates */
+//	matrix::Vector3f _rate_p;		/**< P gain for angular rate error */
+//	matrix::Vector3f _rate_i;		/**< I gain for angular rate error */
+//	matrix::Vector3f _rate_int_lim;		/**< integrator state limit for rate loop */
+//	matrix::Vector3f _rate_d;		/**< D gain for angular rate error */
+//	matrix::Vector3f _rate_ff;		/**< Feedforward gain for desired rates */
 
 	matrix::Vector3f _acro_rate_max;	/**< max attitude rates in acro mode */
 	float _man_tilt_max;			/**< maximum tilt allowed for manual flight [rad] */

@@ -476,7 +476,7 @@ void dyd_pack(DYD *dyd, MSG_orb_data msg_data){
     dyd->head[2] = 'Y';
     dyd->head[3] = 'D';
 
-    // bit mask for sensor type is :  gyo 0 17 28| acc1 1 18 29| mag1 2 19 30| baro1 3 34 35| gps 31 32 33
+    // bit mask for sensor type is :  gyo 0 17 28| acc 1 18 29| mag 2 19 30| baro 3 34 35| gps 31 32 33
     uint64_t bit_mask =1;
 
     if (!(msg_data.status_data.onboard_control_sensors_present & bit_mask) ||

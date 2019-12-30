@@ -85,6 +85,7 @@
 #include <uORB/topics/sensor_preflight.h>
 #include <uORB/topics/vehicle_air_data.h>
 #include <uORB/topics/vehicle_magnetometer.h>
+#include <uORB/topics/dg_voltage.h>
 
 #include <DevMgr.hpp>
 
@@ -199,8 +200,14 @@ private:
 	ParameterHandles	_parameter_handles{};		/**< handles for interesting parameters */
 
 	RCUpdate		_rc_update;
-	VotedSensorsUpdate _voted_sensors_update;
+	VotedSensorsUpdate 	_voted_sensors_update;
 
+	bool 			_dg_voltage_battery_initialized{false};
+	bool 			_dg_voltage_power_initialized{false};
+	float			_dg_voltage_battery_filtered_v;
+	float 			_dg_voltage_power_filtered_v;
+	uint8_t			_dg_voltage_battery_warning{dg_voltage_s::DG_VOLTAGE_BATTERY_WARNING_NONE};
+	orb_advert_t		_dg_voltage_pub{nullptr};
 
 	/**
 	 * Update our local parameter cache.
@@ -460,6 +467,9 @@ Sensors::adc_poll()
 
 		int selected_source = -1;
 
+		float dg_voltage_power_temp = 0.0f;
+		float dg_voltage_battery_temp = 0.0f;
+
 #endif /* BOARD_NUMBER_BRICKS > 0 */
 
 		if (ret >= (int)sizeof(buf_adc[0])) {
@@ -494,7 +504,55 @@ Sensors::adc_poll()
 
 				} else
 #endif /* ADC_AIRSPEED_VOLTAGE_CHANNEL */
-				{
+				
+				if (ADC1_SPARE_1_CHANNEL == buf_adc[i].am_channel) { //dg voltage
+
+					/* calculate dg voltage */
+					const float dg_voltage_power = (float)(buf_adc[i].am_data * _parameters.battery_voltage_scaling * _parameters.battery_v_div * 1.760f);
+					dg_voltage_power_temp = dg_voltage_power;
+					if (!_dg_voltage_power_initialized) {
+						_dg_voltage_power_filtered_v = dg_voltage_power;
+
+					} else {
+						const float dg_filtered_power_next = _dg_voltage_power_filtered_v * 0.99f + dg_voltage_power * 0.01f;
+						if (PX4_ISFINITE(dg_filtered_power_next)) {
+							_dg_voltage_power_filtered_v = dg_filtered_power_next;				
+						}
+					}
+				} 
+				else if (ADC1_SPARE_2_CHANNEL == buf_adc[i].am_channel) {  // dg battery voltage
+
+					/* calculate dg battery voltage */
+					const float dg_voltage_battery = (float)(buf_adc[i].am_data * _parameters.battery_voltage_scaling * _parameters.battery_v_div * 1.815f);
+					dg_voltage_battery_temp = dg_voltage_battery;
+					if (!_dg_voltage_battery_initialized) {
+						_dg_voltage_battery_filtered_v = dg_voltage_battery;
+                        //_dg_voltage_battery_warning = dg_voltage_s::DG_VOLTAGE_BATTERY_WARNING_FAILD;
+
+					} else {
+						const float dg_filtered_battery_next = _dg_voltage_battery_filtered_v * 0.99f + dg_voltage_battery * 0.01f;
+						if (PX4_ISFINITE(dg_filtered_battery_next)) {
+							_dg_voltage_battery_filtered_v = dg_filtered_battery_next;		
+						}
+						
+						if (_dg_voltage_battery_filtered_v / _parameters.battery_n_cells < 0.5f) {
+							_dg_voltage_battery_warning = dg_voltage_s::DG_VOLTAGE_BATTERY_WARNING_FAILD;				
+						
+						} else if (_dg_voltage_battery_filtered_v / _parameters.battery_n_cells < _parameters.battery_warning_v_dg - 0.1f) {
+						    	_dg_voltage_battery_warning = dg_voltage_s::DG_VOLTAGE_BATTERY_WARNING_EMERGENCY;
+
+						} else if (_dg_voltage_battery_filtered_v / _parameters.battery_n_cells < _parameters.battery_warning_v_dg) {
+						    	_dg_voltage_battery_warning = dg_voltage_s::DG_VOLTAGE_BATTERY_WARNING_CRITICAL;
+
+						} else if (_dg_voltage_battery_filtered_v / _parameters.battery_n_cells < _parameters.battery_warning_v_dg + 0.1f) {
+						    	_dg_voltage_battery_warning = dg_voltage_s::DG_VOLTAGE_BATTERY_WARNING_LOW;
+
+						} else {
+						    	_dg_voltage_battery_warning = dg_voltage_s::DG_VOLTAGE_BATTERY_WARNING_NONE;
+						}
+					}	
+				} 
+				else {
 
 #if BOARD_NUMBER_BRICKS > 0
 
@@ -538,6 +596,28 @@ Sensors::adc_poll()
 
 #endif /* BOARD_NUMBER_BRICKS > 0 */
 				}
+			}
+			
+			dg_voltage_s dg_voltage;
+			if (_dg_voltage_power_filtered_v > 10.0f && _dg_voltage_power_filtered_v < 100.0f) {
+				_dg_voltage_power_initialized = true;
+				dg_voltage.voltage_power_v = dg_voltage_power_temp;
+				dg_voltage.voltage_power_filtered_v = _dg_voltage_power_filtered_v;
+			}
+
+			if (_dg_voltage_battery_filtered_v / _parameters.battery_n_cells > 0.5f && _dg_voltage_battery_filtered_v / _parameters.battery_n_cells < 5.0f) {
+				_dg_voltage_battery_initialized = true;
+				dg_voltage.voltage_battery_v = dg_voltage_battery_temp;
+				dg_voltage.voltage_battery_filtered_v = _dg_voltage_battery_filtered_v;
+			}
+
+			if (_dg_voltage_pub != nullptr) {
+				dg_voltage.timestamp = hrt_absolute_time();
+				dg_voltage.warning = _dg_voltage_battery_warning;
+				orb_publish(ORB_ID(dg_voltage), _dg_voltage_pub, &dg_voltage);
+
+			} else {
+				_dg_voltage_pub = orb_advertise(ORB_ID(dg_voltage), &dg_voltage);
 			}
 
 #if BOARD_NUMBER_BRICKS > 0

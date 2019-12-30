@@ -8,7 +8,8 @@
 if ! ver hwcmp INTEL_AEROFC_V1
 then
 	# Start MAVLink on the USB port
-	mavlink start -r 800000 -d /dev/ttyACM0 -m config -x
+	# mavlink start -r 800000 -d /dev/ttyACM0 -m config -x
+	mavlink start -d /dev/ttyACM0
 fi
 
 #

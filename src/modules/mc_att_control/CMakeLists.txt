@@ -32,6 +32,7 @@
 ############################################################################
 
 add_subdirectory(AttitudeControl)
+add_subdirectory(RateControl)
 
 px4_add_module(
 	MODULE modules__mc_att_control
@@ -46,4 +47,5 @@ px4_add_module(
 		conversion
 		mathlib
 		AttitudeControl
+		RateControl
 	)
