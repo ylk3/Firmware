@@ -151,7 +151,7 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
         param_get(param_hd, &paramf);
         stp->sp_y =(uint8_t)(stp_data.attitude_sp_data.roll_body *57.3/paramf* 50.0 + 150.0);
         stp->sp_x =(uint8_t)(stp_data.attitude_sp_data.pitch_body *57.3/paramf* 50.0 + 150.0);
-        stp->sp_z =(uint8_t)((1+ stp_data.attitude_sp_data.thrust_body[2])* 200.0);
+        stp->sp_z = stp_data.arm_data.armed ? (uint8_t)((1+ stp_data.attitude_sp_data.thrust_body[2])* 200.0) : (uint8_t)200;
         param_hd = param_find("MC_YAWRATE_MAX");
         param_get(param_hd, &paramf);
         stp->sp_yaw =(uint8_t)(stp_data.attitude_sp_data.yaw_sp_move_rate*57.3/paramf* 50.0 + 150.0);
@@ -188,25 +188,6 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
     stp->local_roll =-(int32_t)(atan2f(2*(q0*q1 + q2*q3), 1 - 2*(q1*q1 + q2*q2)) /3.14159 *180);
     stp->local_pitch = -(int32_t)(-asinf(2*(q0*q2 - q3*q1)) /3.14159 *180);
     stp->gps_yaw = atan2f(2*(q0*q3 + q1*q2), 1 - 2*(q2*q2 + q3*q3));
-
-//    param_hd = param_find("RC3_MAX");
-//    param_get(param_hd, &paramf);
-//    stp->rc_throttle_mid = paramf;
-//    param_hd = param_find("RC3_MIN");
-//    param_get(param_hd, &paramf);
-//    stp->rc_throttle_mid = (uint8_t)((stp->rc_throttle_mid - paramf)/10 +100);
-
-//    param_hd = param_find("RC2_TRIM");
-//    param_get(param_hd, &paramf);
-//    stp->rc_pitch_mid =(uint8_t)(paramf/10);
-
-//    param_hd = param_find("RC1_TRIM");
-//    param_get(param_hd, &paramf);
-//    stp->rc_roll_mid =(uint8_t)(paramf/10);
-
-//    param_hd = param_find("RC4_TRIM");
-//    param_get(param_hd, &paramf);
-//    stp->rc_yaw_mid =(uint8_t)(paramf/10);
 
     stp->rc_throttle_mid = 150;
     stp->rc_pitch_mid = 150;

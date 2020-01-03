@@ -213,15 +213,12 @@ private:
 
     //DGX LPF
     float baro_lpf_data = 0.0f;
-//    float mag_lpf_data[3] = {};
+    float mag_lpf_data[3] = {};
     float acc_lpf_data[3] = {};
     float gyro_lpf_data[3] = {};
     float ka = 0.0f;
     float Ga = 0.0f;
     float baro_test_data = 0.0f;
-    float mag_test_data[3] ={};
-    float acc_test_data[3] ={};
-    float gyro_test_data[3] ={};
 
     static constexpr float _innov_lpf_tau_inv = 0.2f;	///< Preflight low pass filter time constant inverse (1/sec)
     static constexpr float _vel_innov_test_lim =
@@ -790,26 +787,19 @@ void Ekf2::run()
 
              Ga = 5.820863439e+00f;
              ka = 0.8282041813f;
-             acc_lpf_data[0] = sensors.accelerometer_m_s2[0] /Ga + ka * acc_lpf_data[0];
-             acc_lpf_data[1] = sensors.accelerometer_m_s2[1] /Ga + ka * acc_lpf_data[1];
-             acc_lpf_data[2] = sensors.accelerometer_m_s2[2] /Ga + ka * acc_lpf_data[2];
-             sensors.accelerometer_m_s2[0] = acc_lpf_data[0];
-             sensors.accelerometer_m_s2[1] = acc_lpf_data[1];
-             sensors.accelerometer_m_s2[2] = acc_lpf_data[2];
+//             acc_lpf_data[0] = sensors.accelerometer_m_s2[0] /Ga + ka * acc_lpf_data[0];
+//             acc_lpf_data[1] = sensors.accelerometer_m_s2[1] /Ga + ka * acc_lpf_data[1];
+//             acc_lpf_data[2] = sensors.accelerometer_m_s2[2] /Ga + ka * acc_lpf_data[2];
+//             sensors.accelerometer_m_s2[0] = acc_lpf_data[0];
+//             sensors.accelerometer_m_s2[1] = acc_lpf_data[1];
+//             sensors.accelerometer_m_s2[2] = acc_lpf_data[2];
 
-             gyro_lpf_data[0] = sensors.gyro_rad[0] /Ga + ka * gyro_lpf_data[0];
-             gyro_lpf_data[1] = sensors.gyro_rad[1] /Ga + ka * gyro_lpf_data[1];
-             gyro_lpf_data[2] = sensors.gyro_rad[2] /Ga + ka * gyro_lpf_data[2];
-             sensors.gyro_rad[0] = gyro_lpf_data[0];
-             sensors.gyro_rad[1] = gyro_lpf_data[1];
-             sensors.gyro_rad[2] = gyro_lpf_data[2];
-
-           acc_test_data[0] = sensors.accelerometer_m_s2[0];
-           acc_test_data[1] = sensors.accelerometer_m_s2[1];
-           acc_test_data[2] = sensors.accelerometer_m_s2[2];
-           gyro_test_data[0] = sensors.gyro_rad[0];
-           gyro_test_data[1] = sensors.gyro_rad[1];
-           gyro_test_data[2] = sensors.gyro_rad[2];
+//             gyro_lpf_data[0] = sensors.gyro_rad[0] /Ga + ka * gyro_lpf_data[0];
+//             gyro_lpf_data[1] = sensors.gyro_rad[1] /Ga + ka * gyro_lpf_data[1];
+//             gyro_lpf_data[2] = sensors.gyro_rad[2] /Ga + ka * gyro_lpf_data[2];
+//             sensors.gyro_rad[0] = gyro_lpf_data[0];
+//             sensors.gyro_rad[1] = gyro_lpf_data[1];
+//             sensors.gyro_rad[2] = gyro_lpf_data[2];
       //
 
         // ekf2_timestamps (using 0.1 ms relative timestamps)
@@ -1931,15 +1921,15 @@ bool Ekf2::publish_attitude(const sensor_combined_s &sensors, const hrt_abstime 
         att.pitch_body = asinf(2*(q0*q2 - q3*q1));
         att.yaw_body = atan2f(2*(q0*q3 + q1*q2), 1 - 2*(q2*q2 + q3*q3));
         att.baro_lpf_data = baro_test_data;  //baro_lpf_data;
-        att.mag_lpf_data[0] = mag_test_data[0];
-        att.mag_lpf_data[1] = mag_test_data[1];
-        att.mag_lpf_data[2] = mag_test_data[2];
-        att.acc_lpf_data[0] = acc_test_data[0];
-        att.acc_lpf_data[1] = acc_test_data[1];
-        att.acc_lpf_data[2] = acc_test_data[2];
-        att.gyro_lpf_data[0] = gyro_test_data[0];
-        att.gyro_lpf_data[1] = gyro_test_data[1];
-        att.gyro_lpf_data[2] = gyro_test_data[2];
+        att.mag_lpf_data[0] = mag_lpf_data[0];
+        att.mag_lpf_data[1] = mag_lpf_data[1];
+        att.mag_lpf_data[2] = mag_lpf_data[2];
+        att.acc_lpf_data[0] = acc_lpf_data[0];
+        att.acc_lpf_data[1] = acc_lpf_data[1];
+        att.acc_lpf_data[2] = acc_lpf_data[2];
+        att.gyro_lpf_data[0] = gyro_lpf_data[0];
+        att.gyro_lpf_data[1] = gyro_lpf_data[1];
+        att.gyro_lpf_data[2] = gyro_lpf_data[2];
         int instance;
         orb_publish_auto(ORB_ID(vehicle_attitude), &_att_pub, &att, &instance, ORB_PRIO_HIGH);
 
