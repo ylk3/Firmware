@@ -270,7 +270,9 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
             printf("Passing land\n");
             break;
         case WIFI_COMM_AUTO_TAKEOFF:
-            if (msg_data->home_position_data.valid_alt && msg_data->home_position_data.valid_hpos){
+            //if (msg_data->home_position_data.valid_alt && msg_data->home_position_data.valid_hpos)
+            if (msg_data->local_position_data.xy_global && msg_data->local_position_data.z_global)
+            {
                 set_command_param(&msg_data->command_data, 400,
                                                 1, 0, 0, 0, 0, 0, 0);//VEHICLE_CMD_COMPONENT_ARM_DISARM
                 publish_commander_pd(msg_pd, msg_data);
