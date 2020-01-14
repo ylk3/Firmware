@@ -62,7 +62,9 @@ Takeoff::on_active()
 		set_takeoff_position();
 
 	} else if (is_mission_item_reached() && !_navigator->get_mission_result()->finished) {
-		_navigator->get_mission_result()->finished = true;
+        mavlink_log_info(_navigator->get_mavlink_log_pub(), "Takeoff mission complete");
+
+        _navigator->get_mission_result()->finished = true;
 		_navigator->set_mission_result_updated();
 
 		// set loiter item so position controllers stop doing takeoff logic

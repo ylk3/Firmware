@@ -58,15 +58,16 @@ LogWriterFile::LogWriterFile(size_t buffer_size)
 	//We always write larger chunks (orb messages) to the buffer, so the buffer
 	//needs to be larger than the minimum write chunk (300 is somewhat arbitrary)
 	{
-		math::max(buffer_size, _min_write_chunk + 300),
+        //buffer_size == 0 ? 1 :
+                           math::max(buffer_size, _min_write_chunk + 300),
 		perf_alloc(PC_ELAPSED, "logger_sd_write"), perf_alloc(PC_ELAPSED, "logger_sd_fsync")},
 
 	{
-		1024,
+        1024,
 		perf_alloc(PC_ELAPSED, "logger_sd_write_dglog"), perf_alloc(PC_ELAPSED, "logger_sd_fsync_dglog")},	//add by cyj, 191017
 
 	{
-		300, // buffer size for the mission log (can be kept fairly small)
+        300, // buffer size for the mission log (can be kept fairly small)
 		perf_alloc(PC_ELAPSED, "logger_sd_write_mission"), perf_alloc(PC_ELAPSED, "logger_sd_fsync_mission")}
 }
 {
@@ -165,7 +166,7 @@ void LogWriterFile::thread_stop()
 {
 	// this will terminate the main loop of the writer thread
 	_exit_thread = true;
-	_buffers[0]._should_run = _buffers[1]._should_run = false;
+    _buffers[0]._should_run = _buffers[1]._should_run = _buffers[2]._should_run = false;
 
 	notify();
 
@@ -195,7 +196,13 @@ void LogWriterFile::run()
 			bool start = false;
 			pthread_mutex_lock(&_mtx);
 			pthread_cond_wait(&_cv, &_mtx);
-			start = _buffers[0]._should_run || _buffers[1]._should_run;
+            for (int type_count = 0; type_count < (int)LogType::Count; type_count ++) {
+                if (_buffers[type_count]._should_run){
+                    start = true;
+                    break;
+                }
+            }
+            //start = _buffers[0]._should_run || _buffers[1]._should_run || _buffers[2]._should_run;
 			pthread_mutex_unlock(&_mtx);
 
 			if (start) {
@@ -278,8 +285,17 @@ void LogWriterFile::run()
 				}
 			}
 
-
-			if (_buffers[0].fd() < 0 && _buffers[1].fd() < 0) {
+            bool stop = true;
+            for (int type_count = 0; type_count < (int)LogType::Count; type_count ++) {
+                if (_buffers[type_count].fd() >= 0)
+                {
+                    stop = false;
+                    break;
+                }
+            }
+            //if (_buffers[0].fd() < 0 && _buffers[1].fd() < 0 && _buffers[2].fd() < 0)
+            if (stop)
+            {
 				// stop when both files are closed
 				break;
 			}

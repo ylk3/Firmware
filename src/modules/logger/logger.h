@@ -384,6 +384,7 @@ private:
 	int						_num_mission_subs{0};
 
 	LogWriter					_writer;
+    //LogWriter                  _dg_writer;
 	uint32_t					_log_interval{0};
 	const orb_metadata				*_polling_topic_meta{nullptr}; ///< if non-null, poll on this topic instead of sleeping
 	orb_advert_t					_mavlink_log_pub{nullptr};

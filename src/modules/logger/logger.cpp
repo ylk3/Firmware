@@ -659,7 +659,7 @@ void Logger::add_default_topics()
 	add_topic("vehicle_magnetometer", 200);
 	add_topic("vehicle_rates_setpoint", 30);
 	add_topic("vehicle_status", 200);
-	add_topic("vehicle_status_flags");
+    add_topic("vehicle_status_flags", 200);
     //add_topic("virtual_stick", 200); //200
 	add_topic("vtol_vehicle_status", 200);
 	add_topic("wind_estimate", 200);
@@ -1375,6 +1375,7 @@ bool Logger::check_arming_state(int vehicle_status_sub, MissionLogType mission_l
 					start_log_file(LogType::Mission);
 				}
 
+                bret = true;
 			} else {
 				// delayed stop: we measure the process loads and then stop
 				initialize_load_output(PrintLoadReason::Postflight);

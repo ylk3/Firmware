@@ -981,7 +981,19 @@ Commander::handle_command(vehicle_status_s *status_local, const vehicle_command_
 
         case vehicle_command_s::VEHICLE_CMD_NAV_TAKEOFF: {
                         /* ok, home set, use it to take off */
-                        if (TRANSITION_CHANGED == main_state_transition(*status_local, commander_state_s::MAIN_STATE_AUTO_TAKEOFF, status_flags,
+
+                      //DG takeoff fail prevent
+                       reset_posvel_validity(changed);
+                       if (!status_flags.condition_global_position_valid || !status_flags.condition_local_position_valid){
+                           mavlink_log_critical(&mavlink_log_pub, "Not kwon position");
+                           cmd_result = vehicle_command_s::VEHICLE_CMD_RESULT_TEMPORARILY_REJECTED;
+                           if (land_detector.ground_contact){
+                               arm_disarm(false, &mavlink_log_pub, "Disarm due to takeoff failed");
+                           }
+                           break;
+                       }
+
+                      if (TRANSITION_CHANGED == main_state_transition(*status_local, commander_state_s::MAIN_STATE_AUTO_TAKEOFF, status_flags,
                                         &internal_state)) {
                                 cmd_result = vehicle_command_s::VEHICLE_CMD_RESULT_ACCEPTED;
 
@@ -2784,8 +2796,8 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
                  led_color = led_control_s::COLOR_RED;
                  led_color|= (led_control_s::COLOR_BLUE)<<4;
                  led_color|= 1<<7;*/
-            }else{
-                if (status.nav_state==vehicle_status_s::NAVIGATION_STATE_POSCTL && sp_man.virtual_stick_enable){
+            }else if (status_flags.condition_global_position_valid && status_flags.condition_local_position_valid
+                       && sp_man.virtual_stick_enable){
                     led_mode = led_control_s::MODE_BLINK_NORMAL;
                     led_color = led_control_s::COLOR_BLUE;
                     led_color|= (led_control_s::COLOR_GREEN)<<4;
@@ -2794,7 +2806,6 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
                    led_mode  = led_control_s::MODE_BLINK_NORMAL;
                    led_color = led_control_s::COLOR_GREEN;
                 }
-            }
 
         }
 
