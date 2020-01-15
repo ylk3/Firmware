@@ -52,6 +52,7 @@
 #include <uORB/topics/dg_mission.h>
 #include <uORB/topics/subsystem_info.h>
 #include <uORB/topics/dg_voltage.h>
+#include <uORB/topics/position_setpoint.h>
 
 #define WP_DATA_NUM_MAX (uint16_t) 20
 
@@ -344,7 +345,7 @@ typedef struct {
 typedef struct {
     int arm_fd;
     int gps_fd;
-    int command_fd;
+    //int command_fd;
     int mission_fd;
     int manual_fd;
     int status_fd;
@@ -360,6 +361,7 @@ typedef struct {
     int attitude_sp_fd;
     int home_position_fd;
     int dg_voltage_fd;
+    int position_setpoint_fd;
 }MSG_orb_sub;
 
 typedef struct {
@@ -375,7 +377,7 @@ typedef struct {
 typedef struct {
     struct actuator_armed_s arm_data;
     struct vehicle_gps_position_s gps_data;
-    struct vehicle_command_s command_data;
+    //struct vehicle_command_s command_data;
     struct mission_result_s mission_data;
     struct manual_control_setpoint_s manual_data;
     struct vehicle_status_s status_data;
@@ -391,6 +393,7 @@ typedef struct {
     struct vehicle_attitude_setpoint_s attitude_sp_data;
     struct home_position_s home_position_data;
     struct dg_voltage_s dg_voltage_data;
+    struct position_setpoint_s position_setpoint_data;
 //    struct follow_target_s follow_target_data;
 }MSG_orb_data;
 
@@ -484,7 +487,7 @@ extern uint16_t check_crc(const uint8_t *buffer, uint8_t buflen);
 
 extern void msg_pack_send(MSG_orb_data msg_data, MSG_orb_pub *msg_pd);
 
-extern int find_r_type(uint8_t *buffer, MSG_orb_data *msg_data, MSG_orb_pub *msg_pd,
+extern int find_r_type(uint8_t *buffer, MSG_orb_data msg_data, MSG_orb_pub *msg_pd,
                         MSG_param_hd msg_hd);
 
 extern void msg_param_saved_get(MSG_param_hd msg_hd);

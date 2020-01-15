@@ -13,7 +13,7 @@ static bool rw_uart_thread_running = false;		/**< px4_uart status flag */
 static pthread_mutex_t mutex;
 
 int uart_read;
-uint8_t param_saved[62];
+uint8_t param_saved[62] = {};
 Waypoint_saved wp_data;
 
 MSG_orb_sub msg_fd;
@@ -121,7 +121,7 @@ void msg_orb_sub (void)
     memset(&msg_fd, 0, sizeof(msg_fd));
     msg_fd.arm_fd = orb_subscribe(ORB_ID(actuator_armed));
     msg_fd.gps_fd = orb_subscribe(ORB_ID(vehicle_gps_position));
-    msg_fd.command_fd = orb_subscribe(ORB_ID(vehicle_command));
+    //msg_fd.command_fd = orb_subscribe(ORB_ID(vehicle_command));
     msg_fd.mission_fd = orb_subscribe(ORB_ID(mission_result));
     msg_fd.manual_fd = orb_subscribe(ORB_ID(manual_control_setpoint));
     msg_fd.status_fd = orb_subscribe(ORB_ID(vehicle_status));
@@ -137,6 +137,7 @@ void msg_orb_sub (void)
     msg_fd.attitude_sp_fd = orb_subscribe(ORB_ID(vehicle_attitude_setpoint));
     msg_fd.home_position_fd = orb_subscribe(ORB_ID(home_position));
     msg_fd.dg_voltage_fd = orb_subscribe(ORB_ID(dg_voltage));
+    msg_fd.position_setpoint_fd = orb_subscribe(ORB_ID(position_setpoint));
 }
 
 
@@ -144,7 +145,7 @@ void msg_orb_data(void)
 {
    orb_copy(ORB_ID(actuator_armed), msg_fd.arm_fd,&msg_data.arm_data);
    orb_copy(ORB_ID(vehicle_gps_position), msg_fd.gps_fd,&msg_data.gps_data);
-   orb_copy(ORB_ID(vehicle_command), msg_fd.command_fd,&msg_data.command_data);
+   //orb_copy(ORB_ID(vehicle_command), msg_fd.command_fd,&msg_data.command_data);
    orb_copy(ORB_ID(mission_result), msg_fd.mission_fd, &msg_data.mission_data);
    orb_copy(ORB_ID(manual_control_setpoint), msg_fd.manual_fd, &msg_data.manual_data);
    orb_copy(ORB_ID(vehicle_status), msg_fd.status_fd, &msg_data.status_data);
@@ -160,13 +161,14 @@ void msg_orb_data(void)
    orb_copy(ORB_ID(vehicle_attitude_setpoint), msg_fd.attitude_sp_fd, &msg_data.attitude_sp_data);
    orb_copy(ORB_ID(home_position), msg_fd.home_position_fd, &msg_data.home_position_data);
    orb_copy(ORB_ID(dg_voltage), msg_fd.dg_voltage_fd, &msg_data.dg_voltage_data);
+   orb_copy(ORB_ID(position_setpoint), msg_fd.position_setpoint_fd, &msg_data.position_setpoint_data);
 }
 
 void msg_orb_unsub (void)
 {
     orb_unsubscribe(msg_fd.arm_fd);
     orb_unsubscribe(msg_fd.gps_fd);
-    orb_unsubscribe(msg_fd.command_fd);
+    //orb_unsubscribe(msg_fd.command_fd);
     orb_unsubscribe(msg_fd.mission_fd);
     orb_unsubscribe(msg_fd.manual_fd);
     orb_unsubscribe(msg_fd.status_fd);
@@ -182,6 +184,7 @@ void msg_orb_unsub (void)
     orb_unsubscribe(msg_fd.attitude_sp_fd);
     orb_unsubscribe(msg_fd.home_position_fd);
     orb_unsubscribe(msg_fd.dg_voltage_fd);
+    orb_unsubscribe(msg_fd.position_setpoint_fd);
 }
 
 void msg_param_hd_cache (void)
@@ -337,14 +340,14 @@ static void *receive_loop(void *arg)
 
       if (error_count >0 || poll(&fds[0], 1, 20) > 0)
         {
-
+          usleep(error_count * 1000);
           nread= read(uart_read, &buffer[remain], sizeof(buffer) - (size_t)remain);
           if (nread < 0) nread =0;
 //           pthread_mutex_lock(&mutex);
           for ( read_finish = 0; read_finish < (nread + remain); ) {
                if ((nread + remain - read_finish) < 30) break;
                if (buffer[read_finish] == '$'){
-                    find_type_finish = find_r_type(&buffer[read_finish], &msg_data, &msg_pd, msg_hd);
+                    find_type_finish = find_r_type(&buffer[read_finish], msg_data, &msg_pd, msg_hd);
                     if (find_type_finish < 0) {
                         error_count ++;
                         break;
@@ -413,7 +416,7 @@ int rw_uart_thread_main(int argc, char *argv[])
 
         wp_data_init();
 
-        memset(param_saved, 0, sizeof(param_saved));
+        //memset(param_saved, 0, sizeof(param_saved));
         msg_param_saved_get(msg_hd);
 
         pthread_mutex_init(&mutex, NULL);

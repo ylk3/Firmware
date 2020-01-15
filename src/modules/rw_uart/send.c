@@ -40,14 +40,7 @@ uint8_t get_frame(int data){
     return frame;
 }
 
-uint8_t get_control_status(uint16_t command, uint8_t nav_state){
-    if (command == 241){ //VEHICLE_CMD_PREFLIGHT_CALIBRATION
-        return 7;
-    }
-    else if (command == 242){//VEHICLE_CMD_PREFLIGHT_SET_SENSOR_OFFSETS
-        return 8;
-    }
-    else {
+uint8_t get_control_status(uint8_t nav_state){
         switch (nav_state) {
         case 0://NAVIGATION_STATE_MANUAL :
             return 0;
@@ -80,7 +73,6 @@ uint8_t get_control_status(uint16_t command, uint8_t nav_state){
             return 0xff;
             break;
     }
- }
 }
 
 uint8_t get_warnning (bool geofence_violated, uint8_t warning, bool rc_lost ){
@@ -118,9 +110,8 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
     stp->gps_num = stp_data.gps_data.satellites_used;
     stp->total_time = (uint16_t)(stp_data.gps_data.timestamp/1000000);
 
-    /*VEHICLE_CMD_NAV_WAYPOINT*/
-    stp->gps_wp_latitude = (stp_data.command_data.command == 16) ? (float_t)stp_data.command_data.param5 : NAN;
-    stp->gps_wp_longitude = (stp_data.command_data.command == 16) ? (float_t)stp_data.command_data.param6 : NAN;
+    stp->gps_wp_latitude = stp_data.position_setpoint_data.lat;
+    stp->gps_wp_longitude = stp_data.position_setpoint_data.lon;
 
     stp->wp_seq_low = (uint8_t)((stp_data.mission_data.seq_current+1) & 0x00ff);
     stp->wp_seq_high = (uint8_t)(((stp_data.mission_data.seq_current & 0xff00) +1) >> 8);
@@ -133,7 +124,7 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
          && stp_data.manual_data.mode_switch == 2)
         stp->control_status = 0x02;
     else
-        stp->control_status = get_control_status (stp_data.command_data.command, stp_data.status_data.nav_state);
+        stp->control_status = get_control_status (stp_data.status_data.nav_state);
 
     stp->rc_yaw = (uint8_t)(stp_data.manual_data.r * 50.0 + 150.0);
     stp->rc_y = (uint8_t)(stp_data.manual_data.y * 50.0 +150.0 );
@@ -329,7 +320,7 @@ void yfpa_param_pack(YFPA_param *yfpa_param, MSG_param_hd msg_hd){
     param_get(msg_hd.battery_crit_hd, &paramf);
     //paramf = 3.50 + 0.55 *paramf;
     yfpa_param->battery_warn = ((uint8_t)((paramf - 3.54)/0.05))<<2;
-    printf("battery_warn is %d\n", yfpa_param->battery_warn);
+    //printf("battery_warn is %d\n", yfpa_param->battery_warn);
     param_get(msg_hd.battery_fail_hd, &paramd);
     int fail_act = 0;
     switch (paramd) {
@@ -511,7 +502,7 @@ void dyd_pack(DYD *dyd, MSG_orb_data msg_data){
         {dyd->GPS_baro_status |= 0x04;}
 
     dyd->power_voltage = (uint16_t) (msg_data.dg_voltage_data.voltage_battery_filtered_v *100);
-    printf("dg_voltage is %d\n", dyd->power_voltage);
-    printf("dg_mag is %d\n", dyd->mag_status);
+    //printf("dg_voltage is %d\n", dyd->power_voltage);
+    //printf("dg_mag is %d\n", dyd->mag_status);
 
 }
